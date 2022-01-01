@@ -69,6 +69,7 @@ impl<TContract> SocketConnection<TContract> {
         match &mut *write_access {
             Some(tcp_stream) => {
                 if send_bytes(tcp_stream, self.id, payload).await {
+                    self.statistics.update_sent_amount(payload.len());
                     true
                 } else {
                     process_disconnect(&mut write_access, self.id).await;
