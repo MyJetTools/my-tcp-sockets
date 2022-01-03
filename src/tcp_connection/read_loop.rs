@@ -39,7 +39,7 @@ pub async fn start<TContract, TSerializer>(
 async fn read_loop<TContract, TSerializer>(
     tcp_stream: ReadHalf<TcpStream>,
     connection: Arc<SocketConnection<TContract>>,
-    serializer: TSerializer,
+    mut serializer: TSerializer,
 ) -> Result<(), ReadingTcpContractFail>
 where
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
