@@ -39,8 +39,8 @@ impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
     ) -> ConnectionCallback<TContract>
     where
         TAppSates: Send + Sync + 'static + ApplicationStates,
-        TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
-        TSerializeFactory: Clone + Send + Sync + 'static + Fn() -> TSerializer,
+        TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
+        TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
     {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(accept_sockets_loop(
@@ -68,7 +68,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactor
 ) where
     TAppSates: Send + Sync + 'static + ApplicationStates,
     TContract: Send + Sync + 'static,
-    TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSerializeFactory: Fn() -> TSerializer,
 {
     while !app_states.is_initialized() {
@@ -130,7 +130,7 @@ pub async fn handle_new_connection<TContract, TSerializer>(
     log_context: String,
 ) where
     TContract: Send + Sync + 'static,
-    TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
 {
     let id = connection.id;
 

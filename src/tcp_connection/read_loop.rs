@@ -18,7 +18,7 @@ pub async fn start<TContract, TSerializer>(
     log_context: String,
 ) where
     TContract: Send + Sync + 'static,
-    TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
 {
     connection.callback_event(ConnectionEvent::Connected(connection.clone()));
 

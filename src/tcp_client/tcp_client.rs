@@ -39,8 +39,8 @@ impl TcpClient {
     ) -> ConnectionCallback<TContract>
     where
         TContract: Send + Sync + 'static,
-        TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
-        TSerializeFactory: Clone + Send + Sync + 'static + Fn() -> TSerializer,
+        TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
+        TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
     {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(connection_loop(
@@ -69,8 +69,8 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
     socket_name: String,
 ) where
     TContract: Send + Sync + 'static,
-    TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
-    TSerializeFactory: Clone + Send + Sync + 'static + Fn() -> TSerializer,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
 {
     let mut connection_id: ConnectionId = 0;
 
@@ -122,7 +122,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
                 crate::tcp_connection::new_connection::start(
                     read_socket,
                     connection.clone(),
-                    serializer.clone(),
+                    serializer,
                     Some(ping_data),
                     disconnect_timeout,
                     logger.clone(),
