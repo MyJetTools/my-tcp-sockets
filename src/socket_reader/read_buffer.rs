@@ -3,6 +3,7 @@ pub struct ReadBuffer {
     pos_start: usize,
     pos_end: usize,
     max_capacity: usize,
+    packet_end: usize,
 }
 
 impl ReadBuffer {
@@ -12,6 +13,7 @@ impl ReadBuffer {
             buffer: Vec::with_capacity(max_capacity),
             pos_start: 0,
             pos_end: 0,
+            packet_end: 0,
         };
 
         result.buffer.resize(max_capacity, 0);
@@ -56,11 +58,19 @@ impl ReadBuffer {
         self.pos_end += size;
     }
 
-    pub fn find_sequence(&mut self, sequence_to_find: &[u8]) -> Option<Vec<u8>> {
+    pub fn find_sequence<'s>(&'s mut self, sequence_to_find: &[u8]) -> bool {
+        if self.packet_end > self.pos_start {
+            self.pos_start = self.packet_end;
+
+            if self.pos_start == self.pos_end {
+                self.gc();
+            }
+        }
+
         let buf_len = self.pos_end - self.pos_start;
         if buf_len < sequence_to_find.len() {
             self.gc();
-            return None;
+            return false;
         }
 
         for index in self.pos_start..=self.pos_end - sequence_to_find.len() {
@@ -68,21 +78,21 @@ impl ReadBuffer {
                 &self.buffer[index..index + sequence_to_find.len()],
                 sequence_to_find,
             ) {
-                let end_pos = index + sequence_to_find.len();
-
-                let result = self.buffer[self.pos_start..end_pos].to_vec();
-                self.pos_start = end_pos;
-
-                if self.pos_start == self.pos_end {
-                    self.gc();
-                }
-
-                return Some(result);
+                self.packet_end = index + sequence_to_find.len();
+                return true;
             }
         }
 
         self.gc();
-        None
+        false
+    }
+
+    pub fn get_package(&self) -> &[u8] {
+        if self.packet_end > self.pos_start {
+            return &self.buffer[self.pos_start..self.packet_end];
+        }
+
+        panic!("You are reading the packet which is not detected yet");
     }
 }
 
@@ -142,9 +152,11 @@ mod tests {
 
         read_buffer.commit_written_size(5);
 
-        let found_result = read_buffer.find_sequence(seq_to_fine.as_ref()).unwrap();
+        let found_result = read_buffer.find_sequence(seq_to_fine.as_ref());
 
-        assert_eq!(found_result, vec![51, 52, 53, 13, 10]);
+        assert_eq!(true, found_result);
+
+        assert_eq!(read_buffer.get_package().to_vec(), vec![51, 52, 53, 13, 10]);
     }
 
     #[test]
@@ -172,15 +184,17 @@ mod tests {
 
         read_buffer.commit_written_size(10);
 
-        let found_result = read_buffer.find_sequence(seq_to_fine.as_ref()).unwrap();
-        assert_eq!(found_result, vec![51, 52, 53, 13, 10]);
+        let found_result = read_buffer.find_sequence(seq_to_fine.as_ref());
+        assert_eq!(true, found_result);
+        assert_eq!(read_buffer.get_package().to_vec(), vec![51, 52, 53, 13, 10]);
 
-        let found_result = read_buffer.find_sequence(seq_to_fine.as_ref()).unwrap();
-        assert_eq!(found_result, vec![54, 55, 56, 13, 10]);
+        let found_result = read_buffer.find_sequence(seq_to_fine.as_ref());
+        assert_eq!(true, found_result);
+        assert_eq!(read_buffer.get_package().to_vec(), vec![54, 55, 56, 13, 10]);
 
         let found_result = read_buffer.find_sequence(seq_to_fine.as_ref());
 
-        assert_eq!(true, found_result.is_none());
+        assert_eq!(false, found_result);
 
         assert_eq!(0, read_buffer.pos_start);
         assert_eq!(0, read_buffer.pos_end);

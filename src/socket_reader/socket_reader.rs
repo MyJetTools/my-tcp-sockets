@@ -15,11 +15,11 @@ pub trait SocketReader {
     async fn read_byte_array(&mut self) -> Result<Vec<u8>, ReadingTcpContractFail>;
     async fn read_i64(&mut self) -> Result<i64, ReadingTcpContractFail>;
     async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingTcpContractFail>;
-    async fn read_until_end_marker(
+    async fn read_until_end_marker<'s>(
         &mut self,
-        read_buffer: &mut ReadBuffer,
+        read_buffer: &'s mut ReadBuffer,
         end_marker: &[u8],
-    ) -> Result<Vec<u8>, ReadingTcpContractFail>;
+    ) -> Result<&'s [u8], ReadingTcpContractFail>;
 }
 
 pub struct SocketReaderTcpStream {
@@ -111,13 +111,13 @@ impl SocketReader for SocketReaderTcpStream {
         return Ok(value);
     }
 
-    async fn read_until_end_marker(
+    async fn read_until_end_marker<'s>(
         &mut self,
-        read_buffer: &mut ReadBuffer,
+        read_buffer: &'s mut ReadBuffer,
         end_marker: &[u8],
-    ) -> Result<Vec<u8>, ReadingTcpContractFail> {
-        if let Some(result) = read_buffer.find_sequence(end_marker) {
-            return Ok(result);
+    ) -> Result<&'s [u8], ReadingTcpContractFail> {
+        if read_buffer.find_sequence(end_marker) {
+            return Ok(read_buffer.get_package());
         }
 
         loop {
@@ -128,17 +128,15 @@ impl SocketReader for SocketReaderTcpStream {
                     return Err(ReadingTcpContractFail::ErrorReadingSize);
                 }
 
-                let buf = buf.unwrap();
-
-                self.tcp_stream.read(buf).await
+                self.tcp_stream.read(buf.unwrap()).await
             };
 
             match read {
                 Ok(size) => {
                     read_buffer.commit_written_size(size);
 
-                    if let Some(result) = read_buffer.find_sequence(end_marker) {
-                        return Ok(result);
+                    if read_buffer.find_sequence(end_marker) {
+                        return Ok(read_buffer.get_package());
                     }
                 }
                 Err(err) => {
