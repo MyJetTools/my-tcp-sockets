@@ -32,14 +32,15 @@ impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
         }
     }
 
-    pub async fn start<TSerializer, TAppSates>(
+    pub async fn start<TSerializer, TAppSates, TSerializeFactory>(
         &self,
         app_states: Arc<TAppSates>,
-        serializer: TSerializer,
+        serializer_factory: Arc<TSerializeFactory>,
     ) -> ConnectionCallback<TContract>
     where
         TAppSates: Send + Sync + 'static + ApplicationStates,
         TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
+        TSerializeFactory: Clone + Send + Sync + 'static + Fn() -> TSerializer,
     {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(accept_sockets_loop(
@@ -47,7 +48,7 @@ impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
             self.addr,
             Arc::new(sender),
             self.connections.clone(),
-            serializer,
+            serializer_factory.clone(),
             self.logger.clone(),
             self.name.clone(),
         ));
@@ -56,18 +57,19 @@ impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
     }
 }
 
-async fn accept_sockets_loop<TContract, TSerializer, TAppSates>(
+async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactory>(
     app_states: Arc<TAppSates>,
     addr: SocketAddr,
     sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
     connections: Arc<ConnectionsList<TContract>>,
-    serializer: TSerializer,
+    serializer_factory: Arc<TSerializeFactory>,
     logger: Arc<MyLogger>,
     context_name: String,
 ) where
     TAppSates: Send + Sync + 'static + ApplicationStates,
     TContract: Send + Sync + 'static,
     TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TSerializeFactory: Fn() -> TSerializer,
 {
     while !app_states.is_initialized() {
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -101,7 +103,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates>(
                     read_socket,
                     connection,
                     connections.clone(),
-                    serializer.clone(),
+                    serializer_factory(),
                     logger.clone(),
                     log_context,
                 ));

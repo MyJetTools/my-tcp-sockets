@@ -33,20 +33,21 @@ impl TcpClient {
         }
     }
 
-    pub fn start<TContract, TSerializer>(
+    pub fn start<TContract, TSerializer, TSerializeFactory>(
         &self,
-        serializer: TSerializer,
+        serializer_factory: Arc<TSerializeFactory>,
     ) -> ConnectionCallback<TContract>
     where
         TContract: Send + Sync + 'static,
         TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
+        TSerializeFactory: Clone + Send + Sync + 'static + Fn() -> TSerializer,
     {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(connection_loop(
             self.host_port.clone(),
             self.connect_timeout,
             Arc::new(sender),
-            serializer,
+            serializer_factory,
             self.seconds_to_ping,
             self.disconnect_timeout,
             self.logger.clone(),
@@ -57,11 +58,11 @@ impl TcpClient {
     }
 }
 
-async fn connection_loop<TContract, TSerializer>(
+async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
     host_port: String,
     connect_timeout: Duration,
     sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
-    serializer: TSerializer,
+    serializer_factory: Arc<TSerializeFactory>,
     seconds_to_ping: usize,
     disconnect_timeout: Duration,
     logger: Arc<MyLogger>,
@@ -69,6 +70,7 @@ async fn connection_loop<TContract, TSerializer>(
 ) where
     TContract: Send + Sync + 'static,
     TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TSerializeFactory: Clone + Send + Sync + 'static + Fn() -> TSerializer,
 {
     let mut connection_id: ConnectionId = 0;
 
@@ -109,6 +111,8 @@ async fn connection_loop<TContract, TSerializer>(
                     logger.clone(),
                     log_context.clone(),
                 ));
+
+                let serializer = serializer_factory();
 
                 let ping_data = PingData {
                     seconds_to_ping,
