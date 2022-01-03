@@ -5,7 +5,7 @@ use tokio::{
     net::TcpStream,
 };
 
-use super::ReadingTcpContractFail;
+use super::{ReadBuffer, ReadingTcpContractFail};
 
 #[async_trait]
 pub trait SocketReader {
@@ -15,6 +15,11 @@ pub trait SocketReader {
     async fn read_byte_array(&mut self) -> Result<Vec<u8>, ReadingTcpContractFail>;
     async fn read_i64(&mut self) -> Result<i64, ReadingTcpContractFail>;
     async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingTcpContractFail>;
+    async fn read_until_end_marker(
+        &mut self,
+        read_buffer: &mut ReadBuffer,
+        end_marker: &[u8],
+    ) -> Result<Vec<u8>, ReadingTcpContractFail>;
 }
 
 pub struct SocketReaderTcpStream {
@@ -104,5 +109,42 @@ impl SocketReader for SocketReaderTcpStream {
         self.read_size += size + 4;
 
         return Ok(value);
+    }
+
+    async fn read_until_end_marker(
+        &mut self,
+        read_buffer: &mut ReadBuffer,
+        end_marker: &[u8],
+    ) -> Result<Vec<u8>, ReadingTcpContractFail> {
+        if let Some(result) = read_buffer.find_sequence(end_marker) {
+            return Ok(result);
+        }
+
+        loop {
+            let read = {
+                let buf = read_buffer.get_buffer_to_write();
+
+                if buf.is_none() {
+                    return Err(ReadingTcpContractFail::ErrorReadingSize);
+                }
+
+                let buf = buf.unwrap();
+
+                self.tcp_stream.read(buf).await
+            };
+
+            match read {
+                Ok(size) => {
+                    read_buffer.commit_written_size(size);
+
+                    if let Some(result) = read_buffer.find_sequence(end_marker) {
+                        return Ok(result);
+                    }
+                }
+                Err(err) => {
+                    return Err(ReadingTcpContractFail::IoError(err));
+                }
+            }
+        }
     }
 }
