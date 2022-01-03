@@ -29,6 +29,7 @@ impl ReadBuffer {
         if self.pos_start == self.pos_end {
             self.pos_start = 0;
             self.pos_end = 0;
+            self.packet_end = 0;
             return;
         }
 
@@ -40,6 +41,7 @@ impl ReadBuffer {
 
         self.pos_start = 0;
         self.pos_end -= pos_start;
+        self.packet_end -= pos_start;
     }
 
     pub fn get_buffer_to_write(&mut self) -> Option<&mut [u8]> {
