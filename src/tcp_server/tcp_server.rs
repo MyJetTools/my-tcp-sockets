@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use my_logger::{LogLevel, MyLogger};
+use my_logger::{GetMyLoggerReader, LogLevel, MyLogger};
 use tokio::{
     io::{self, AsyncWriteExt, ReadHalf},
     net::{TcpListener, TcpStream},
@@ -28,8 +28,43 @@ impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
             name,
             addr,
             connections: Arc::new(ConnectionsList::new()),
-            logger: Arc::new(MyLogger::new()),
+            logger: Arc::new(MyLogger::new(None)),
         }
+    }
+
+    pub fn new_with_logger<TGetMyLoggerReader: GetMyLoggerReader>(
+        name: String,
+        addr: SocketAddr,
+        logger: Arc<MyLogger>,
+    ) -> Self {
+        Self {
+            name,
+            addr,
+            connections: Arc::new(ConnectionsList::new()),
+            logger,
+        }
+    }
+
+    pub fn new_with_logger_reader<TGetMyLoggerReader: GetMyLoggerReader>(
+        name: String,
+        addr: SocketAddr,
+        get_logger: &TGetMyLoggerReader,
+    ) -> Self {
+        let logger = get_logger.get();
+        Self {
+            name,
+            addr,
+            connections: Arc::new(ConnectionsList::new()),
+            logger: Arc::new(MyLogger::new(Some(logger.as_ref()))),
+        }
+    }
+
+    pub fn plug_logger<TGetMyLoggerReader: GetMyLoggerReader>(
+        &mut self,
+        get_logger: &TGetMyLoggerReader,
+    ) {
+        let logger = get_logger.get();
+        self.logger = Arc::new(MyLogger::new(Some(logger.as_ref())))
     }
 
     pub async fn start<TSerializer, TAppSates, TSerializeFactory>(

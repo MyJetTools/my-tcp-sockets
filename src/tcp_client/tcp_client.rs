@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use my_logger::{LogLevel, MyLogger};
+use my_logger::{GetMyLoggerReader, LogLevel, MyLogger};
 use tokio::net::TcpStream;
 
 use tokio::io;
@@ -28,9 +28,48 @@ impl TcpClient {
             connect_timeout: Duration::from_secs(3),
             seconds_to_ping: 3,
             disconnect_timeout: Duration::from_secs(9),
-            logger: Arc::new(MyLogger::new()),
+            logger: Arc::new(MyLogger::new(None)),
             name,
         }
+    }
+
+    pub fn new_with_logger<TGetMyLoggerReader: GetMyLoggerReader>(
+        name: String,
+        host_port: String,
+        logger: Arc<MyLogger>,
+    ) -> Self {
+        Self {
+            host_port,
+            connect_timeout: Duration::from_secs(3),
+            seconds_to_ping: 3,
+            disconnect_timeout: Duration::from_secs(9),
+            logger,
+            name,
+        }
+    }
+
+    pub fn new_with_logger_reader<TGetMyLoggerReader: GetMyLoggerReader>(
+        name: String,
+        host_port: String,
+        get_logger: &TGetMyLoggerReader,
+    ) -> Self {
+        let logger = get_logger.get();
+        Self {
+            host_port,
+            connect_timeout: Duration::from_secs(3),
+            seconds_to_ping: 3,
+            disconnect_timeout: Duration::from_secs(9),
+            logger: Arc::new(MyLogger::new(Some(logger.as_ref()))),
+            name,
+        }
+    }
+
+    pub fn plug_logger<TGetMyLoggerReader: GetMyLoggerReader>(
+        &mut self,
+        get_logger: &TGetMyLoggerReader,
+    ) {
+        let logger = get_logger.get();
+        self.logger = Arc::new(MyLogger::new(Some(logger.as_ref())))
     }
 
     pub fn start<TContract, TSerializer, TSerializeFactory>(
