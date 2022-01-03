@@ -1,4 +1,4 @@
-mod socket_reader;
+pub mod socket_reader;
 mod tcp_client;
 pub mod tcp_connection;
 mod tcp_server;
