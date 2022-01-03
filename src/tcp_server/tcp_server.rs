@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use my_logger::{LogLevel, MyLogger};
 use tokio::{
     io::{self, AsyncWriteExt, ReadHalf},
     net::{TcpListener, TcpStream},
@@ -16,14 +17,18 @@ use super::ConnectionsList;
 
 pub struct TcpServer<TContract> {
     addr: SocketAddr,
-    connections: Arc<ConnectionsList<TContract>>,
+    pub connections: Arc<ConnectionsList<TContract>>,
+    name: String,
+    pub logger: Arc<MyLogger>,
 }
 
 impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
-    pub fn new(addr: SocketAddr) -> Self {
+    pub fn new(name: String, addr: SocketAddr) -> Self {
         Self {
+            name,
             addr,
             connections: Arc::new(ConnectionsList::new()),
+            logger: Arc::new(MyLogger::new()),
         }
     }
 
@@ -43,6 +48,8 @@ impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
             Arc::new(sender),
             self.connections.clone(),
             serializer,
+            self.logger.clone(),
+            self.name.clone(),
         ));
 
         ConnectionCallback::new(receiver)
@@ -55,6 +62,8 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates>(
     sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
     connections: Arc<ConnectionsList<TContract>>,
     serializer: TSerializer,
+    logger: Arc<MyLogger>,
+    context_name: String,
 ) where
     TAppSates: Send + Sync + 'static + ApplicationStates,
     TContract: Send + Sync + 'static,
@@ -77,20 +86,35 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates>(
                     break;
                 }
 
+                let log_context =
+                    format!("ServerConnection:{}. Id:{}", context_name, connection_id);
+
                 let connection = Arc::new(SocketConnection::new(
                     write_socket,
                     connection_id,
                     Some(socket_addr),
                     sender.clone(),
+                    logger.clone(),
+                    log_context.clone(),
                 ));
                 tokio::task::spawn(handle_new_connection(
                     read_socket,
                     connection,
                     connections.clone(),
                     serializer.clone(),
+                    logger.clone(),
+                    log_context,
                 ));
             }
-            Err(err) => println!("Can not accept socket {}. Err: {}", addr, err),
+            Err(err) => logger.write_log(
+                LogLevel::FatalError,
+                "Tcp Accept Socket".to_string(),
+                format!("Can not accept socket. Err:{}", err),
+                Some(format!(
+                    "TcpServerSocket:{}, EndPoint:{}",
+                    context_name, addr
+                )),
+            ),
         }
     }
 }
@@ -100,6 +124,8 @@ pub async fn handle_new_connection<TContract, TSerializer>(
     connection: Arc<SocketConnection<TContract>>,
     connections: Arc<ConnectionsList<TContract>>,
     serializer: TSerializer,
+    logger: Arc<MyLogger>,
+    log_context: String,
 ) where
     TContract: Send + Sync + 'static,
     TSerializer: Clone + Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -114,6 +140,8 @@ pub async fn handle_new_connection<TContract, TSerializer>(
         serializer,
         None,
         Duration::from_secs(60),
+        logger.clone(),
+        log_context,
     )
     .await;
     connections.remove(id).await;

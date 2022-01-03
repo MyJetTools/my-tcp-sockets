@@ -1,3 +1,3 @@
 mod tcp_client;
 
-pub use tcp_client::start;
+pub use tcp_client::TcpClient;

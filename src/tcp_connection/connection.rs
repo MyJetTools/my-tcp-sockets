@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use my_logger::{LogLevel, MyLogger};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::{io::WriteHalf, net::TcpStream, sync::Mutex};
 
@@ -9,7 +10,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::ConnectionId;
 
-use super::{ConnectionEvent, ConnectionStatistics};
+use super::{ConnectionEvent, ConnectionName, ConnectionStatistics};
 
 pub struct SocketConnection<TContract> {
     pub socket: Mutex<Option<WriteHalf<TcpStream>>>,
@@ -18,6 +19,9 @@ pub struct SocketConnection<TContract> {
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
     sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
+    logger: Arc<MyLogger>,
+    log_context: String,
+    pub connection_name: Arc<ConnectionName>,
 }
 
 impl<TContract> SocketConnection<TContract> {
@@ -26,6 +30,8 @@ impl<TContract> SocketConnection<TContract> {
         id: i32,
         addr: Option<SocketAddr>,
         sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
+        logger: Arc<MyLogger>,
+        log_context: String,
     ) -> Self {
         Self {
             socket: Mutex::new(Some(socket)),
@@ -34,15 +40,35 @@ impl<TContract> SocketConnection<TContract> {
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),
             sender,
+            logger,
+            log_context,
+            connection_name: Arc::new(ConnectionName::new(format!("{:?}", addr))),
         }
     }
 
     pub fn callback_event(&self, event: ConnectionEvent<TContract>) {
         if let Err(err) = self.sender.send(event) {
-            println!(
+            let connection_name = self.connection_name.clone();
+            let logger = self.logger.clone();
+            let connection_id = self.id;
+            let log_context = self.log_context.clone();
+            let message = format!(
                 "Error by sending callback to the connection: {}. Err: {}",
-                self.id, err
+                connection_id, err
             );
+
+            tokio::spawn(async move {
+                let connection_name = connection_name.get().await;
+                logger.write_log(
+                    LogLevel::FatalError,
+                    "Tcp Accept Socket".to_string(),
+                    message,
+                    Some(format!(
+                        "{}; ConnectionName:{}",
+                        log_context, connection_name
+                    )),
+                )
+            });
         }
     }
 
