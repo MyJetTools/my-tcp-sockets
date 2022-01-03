@@ -133,6 +133,10 @@ impl SocketReader for SocketReaderTcpStream {
 
             match read {
                 Ok(size) => {
+                    if size == 0 {
+                        return Err(ReadingTcpContractFail::SocketDisconnected);
+                    }
+
                     read_buffer.commit_written_size(size);
 
                     if read_buffer.find_sequence(end_marker) {
