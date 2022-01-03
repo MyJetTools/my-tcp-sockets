@@ -60,7 +60,7 @@ where
             .update(DateTimeAsMicroseconds::now());
 
         connection.callback_event(ConnectionEvent::Payload {
-            id: connection.clone(),
+            connection: connection.clone(),
             payload: contract,
         });
     }

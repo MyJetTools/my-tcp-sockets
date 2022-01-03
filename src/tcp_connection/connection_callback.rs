@@ -8,7 +8,7 @@ pub enum ConnectionEvent<TContract> {
     Connected(Arc<SocketConnection<TContract>>),
     Disconnected(Arc<SocketConnection<TContract>>),
     Payload {
-        id: Arc<SocketConnection<TContract>>,
+        connection: Arc<SocketConnection<TContract>>,
         payload: TContract,
     },
 }
