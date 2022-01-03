@@ -83,7 +83,13 @@ impl<TContract> SocketConnection<TContract> {
             return false;
         }
 
-        process_disconnect(&mut write_access, self.id).await;
+        process_disconnect(
+            &mut write_access,
+            self.id,
+            self.logger.as_ref(),
+            self.log_context.as_str(),
+        )
+        .await;
 
         self.statistics.disconnect();
         return true;
@@ -94,11 +100,25 @@ impl<TContract> SocketConnection<TContract> {
 
         match &mut *write_access {
             Some(tcp_stream) => {
-                if send_bytes(tcp_stream, self.id, payload).await {
+                if send_bytes(
+                    tcp_stream,
+                    self.id,
+                    payload,
+                    self.logger.as_ref(),
+                    self.log_context.as_str(),
+                )
+                .await
+                {
                     self.statistics.update_sent_amount(payload.len());
                     true
                 } else {
-                    process_disconnect(&mut write_access, self.id).await;
+                    process_disconnect(
+                        &mut write_access,
+                        self.id,
+                        self.logger.as_ref(),
+                        self.log_context.as_str(),
+                    )
+                    .await;
                     false
                 }
             }
@@ -111,23 +131,40 @@ async fn send_bytes(
     tcp_stream: &mut WriteHalf<TcpStream>,
     id: ConnectionId,
     payload: &[u8],
+    logger: &MyLogger,
+    log_context: &str,
 ) -> bool {
     match tcp_stream.write_all(payload).await {
         Ok(_) => true,
         Err(err) => {
-            println!("Can not send payload to socket {}. Err: {}", id, err);
+            logger.write_log(
+                LogLevel::Info,
+                "TcpConnection::send_bytes".to_string(),
+                format!("Can not send payload to socket {}. Err: {}", id, err),
+                Some(log_context.to_string()),
+            );
             false
         }
     }
 }
 
-async fn process_disconnect(tcp_stream: &mut Option<WriteHalf<TcpStream>>, id: ConnectionId) {
+async fn process_disconnect(
+    tcp_stream: &mut Option<WriteHalf<TcpStream>>,
+    id: ConnectionId,
+    logger: &MyLogger,
+    log_context: &str,
+) {
     let mut result = None;
     std::mem::swap(&mut result, tcp_stream);
 
     let mut result = result.unwrap();
 
     if let Err(err) = result.shutdown().await {
-        println!("Error while disconnecting socket {}. Err: {}", id, err);
+        logger.write_log(
+            LogLevel::Info,
+            "process_disconnect".to_string(),
+            format!("Error while disconnecting socket {}. Err: {}", id, err),
+            Some(log_context.to_string()),
+        );
     }
 }
