@@ -1,13 +1,11 @@
-#[cfg(test)]
 use super::{ReadBuffer, ReadingTcpContractFail, SocketReader};
-#[cfg(test)]
+
 use async_trait::async_trait;
 
-#[cfg(test)]
 pub struct SocketReaderMock {
     data: Vec<u8>,
 }
-#[cfg(test)]
+
 impl SocketReaderMock {
     pub fn new() -> Self {
         Self { data: Vec::new() }
@@ -18,7 +16,6 @@ impl SocketReaderMock {
     }
 }
 
-#[cfg(test)]
 #[async_trait]
 impl SocketReader for SocketReaderMock {
     async fn read_byte(&mut self) -> Result<u8, ReadingTcpContractFail> {
