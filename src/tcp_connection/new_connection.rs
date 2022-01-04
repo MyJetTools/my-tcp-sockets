@@ -5,7 +5,7 @@ use tokio::{io::ReadHalf, net::TcpStream};
 
 use crate::TcpSocketSerializer;
 
-use super::{ping_loop::PingData, ConnectionEvent, SocketConnection};
+use super::{ping_loop::PingData, SocketConnection};
 
 pub async fn start<TContract, TSerializer>(
     read_socket: ReadHalf<TcpStream>,
@@ -19,8 +19,6 @@ pub async fn start<TContract, TSerializer>(
     TContract: Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
 {
-    connection.callback_event(ConnectionEvent::Connected(connection.clone()));
-
     let ping_handle = tokio::spawn(crate::tcp_connection::ping_loop::start(
         connection.clone(),
         ping_data,
