@@ -18,6 +18,12 @@ pub struct SocketData<TSerializer> {
     serializer: TSerializer,
 }
 
+impl<TSerializer> SocketData<TSerializer> {
+    pub fn get_serializer(&self) -> &TSerializer {
+        &self.serializer
+    }
+}
+
 pub struct SocketConnection<TContract, TSerializer: TcpSocketSerializer<TContract>> {
     pub socket: Mutex<Option<SocketData<TSerializer>>>,
     pub addr: Option<SocketAddr>,
