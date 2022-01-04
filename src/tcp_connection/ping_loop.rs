@@ -3,15 +3,15 @@ use std::{sync::Arc, time::Duration};
 use my_logger::MyLogger;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::tcp_connection::SocketConnection;
+use crate::{tcp_connection::SocketConnection, TcpSocketSerializer};
 
 pub struct PingData {
     pub seconds_to_ping: usize,
     pub ping_packet: Vec<u8>,
 }
 
-pub async fn start<TContract>(
-    connection: Arc<SocketConnection<TContract>>,
+pub async fn start<TContract, TSerializer: TcpSocketSerializer<TContract>>(
+    connection: Arc<SocketConnection<TContract, TSerializer>>,
     ping_data: Option<PingData>,
     disconnect_interval: Duration,
     logger: Arc<MyLogger>,

@@ -8,33 +8,47 @@ use tokio::{io::WriteHalf, net::TcpStream, sync::Mutex};
 
 use tokio::io::AsyncWriteExt;
 
-use crate::ConnectionId;
+use crate::socket_reader::{ReadingTcpContractFail, SocketReader};
+use crate::{ConnectionId, TcpSocketSerializer};
 
 use super::{ConnectionEvent, ConnectionName, ConnectionStatistics};
 
-pub struct SocketConnection<TContract> {
-    pub socket: Mutex<Option<WriteHalf<TcpStream>>>,
+pub struct SocketData<TSerializer> {
+    tcp_stream: WriteHalf<TcpStream>,
+    serializer: TSerializer,
+}
+
+pub struct SocketConnection<TContract, TSerializer: TcpSocketSerializer<TContract>> {
+    pub socket: Mutex<Option<SocketData<TSerializer>>>,
     pub addr: Option<SocketAddr>,
     pub id: ConnectionId,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
-    sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
+    sender: Arc<UnboundedSender<ConnectionEvent<TContract, TSerializer>>>,
     logger: Arc<MyLogger>,
     log_context: String,
     pub connection_name: Arc<ConnectionName>,
 }
 
-impl<TContract> SocketConnection<TContract> {
+impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
+    SocketConnection<TContract, TSerializer>
+{
     pub fn new(
         socket: WriteHalf<TcpStream>,
-        id: i32,
+        serializer: TSerializer,
+        id: ConnectionId,
         addr: Option<SocketAddr>,
-        sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
+        sender: Arc<UnboundedSender<ConnectionEvent<TContract, TSerializer>>>,
         logger: Arc<MyLogger>,
         log_context: String,
     ) -> Self {
+        let socket_data = SocketData {
+            tcp_stream: socket,
+            serializer,
+        };
+
         Self {
-            socket: Mutex::new(Some(socket)),
+            socket: Mutex::new(Some(socket_data)),
             id,
             addr,
             connected: AtomicBool::new(true),
@@ -46,7 +60,7 @@ impl<TContract> SocketConnection<TContract> {
         }
     }
 
-    pub fn callback_event(&self, event: ConnectionEvent<TContract>) {
+    pub fn callback_event(&self, event: ConnectionEvent<TContract, TSerializer>) {
         if let Err(err) = self.sender.send(event) {
             let connection_name = self.connection_name.clone();
             let logger = self.logger.clone();
@@ -95,13 +109,49 @@ impl<TContract> SocketConnection<TContract> {
         return true;
     }
 
-    pub async fn send_bytes(&self, payload: &[u8]) -> bool {
+    pub async fn send(&self, payload: TContract) -> bool {
         let mut write_access = self.socket.lock().await;
 
         match &mut *write_access {
-            Some(tcp_stream) => {
+            Some(socket_data) => {
+                let payload = socket_data.serializer.serialize(payload);
+                self.send_package(&mut write_access, payload.as_slice())
+                    .await
+            }
+            None => false,
+        }
+    }
+
+    pub async fn deserialize<TSocketReader: Send + Sync + 'static + SocketReader>(
+        &self,
+        socket_reader: &mut TSocketReader,
+    ) -> Result<TContract, ReadingTcpContractFail> {
+        let mut write_access = self.socket.lock().await;
+
+        match &mut *write_access {
+            Some(socket_data) => {
+                let packet = socket_data.serializer.deserialize(socket_reader).await?;
+                socket_data.serializer.apply_packet(&packet);
+                Ok(packet)
+            }
+            None => Err(ReadingTcpContractFail::SocketDisconnected),
+        }
+    }
+
+    pub async fn send_bytes(&self, payload: &[u8]) -> bool {
+        let mut write_access = self.socket.lock().await;
+        self.send_package(&mut write_access, payload).await
+    }
+
+    async fn send_package(
+        &self,
+        write_access: &mut Option<SocketData<TSerializer>>,
+        payload: &[u8],
+    ) -> bool {
+        match &mut *write_access {
+            Some(socket_data) => {
                 if send_bytes(
-                    tcp_stream,
+                    &mut socket_data.tcp_stream,
                     self.id,
                     payload,
                     self.logger.as_ref(),
@@ -113,7 +163,7 @@ impl<TContract> SocketConnection<TContract> {
                     true
                 } else {
                     process_disconnect(
-                        &mut write_access,
+                        write_access,
                         self.id,
                         self.logger.as_ref(),
                         self.log_context.as_str(),
@@ -148,8 +198,8 @@ async fn send_bytes(
     }
 }
 
-async fn process_disconnect(
-    tcp_stream: &mut Option<WriteHalf<TcpStream>>,
+async fn process_disconnect<TSerializer>(
+    tcp_stream: &mut Option<SocketData<TSerializer>>,
     id: ConnectionId,
     logger: &MyLogger,
     log_context: &str,
@@ -159,7 +209,7 @@ async fn process_disconnect(
 
     let mut result = result.unwrap();
 
-    if let Err(err) = result.shutdown().await {
+    if let Err(err) = result.tcp_stream.shutdown().await {
         logger.write_log(
             LogLevel::Info,
             "process_disconnect".to_string(),

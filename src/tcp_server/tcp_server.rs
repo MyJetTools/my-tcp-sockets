@@ -15,14 +15,18 @@ use crate::{
 
 use super::ConnectionsList;
 
-pub struct TcpServer<TContract> {
+pub struct TcpServer<TContract, TSerializer: TcpSocketSerializer<TContract>> {
     addr: SocketAddr,
-    pub connections: Arc<ConnectionsList<TContract>>,
+    pub connections: Arc<ConnectionsList<TContract, TSerializer>>,
     name: String,
     pub logger: Arc<MyLogger>,
 }
 
-impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
+impl<TContract, TSerializer> TcpServer<TContract, TSerializer>
+where
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TContract: Send + Sync + 'static,
+{
     pub fn new(name: String, addr: SocketAddr) -> Self {
         Self {
             name,
@@ -67,14 +71,14 @@ impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
         self.logger = Arc::new(MyLogger::new(Some(logger.as_ref())))
     }
 
-    pub async fn start<TSerializer, TAppSates, TSerializeFactory>(
+    pub async fn start<TAppSates, TSerializeFactory>(
         &self,
         app_states: Arc<TAppSates>,
         serializer_factory: Arc<TSerializeFactory>,
-    ) -> ConnectionCallback<TContract>
+    ) -> ConnectionCallback<TContract, TSerializer>
     where
         TAppSates: Send + Sync + 'static + ApplicationStates,
-        TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
+
         TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
     {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -95,8 +99,8 @@ impl<TContract: Send + Sync + 'static> TcpServer<TContract> {
 async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactory>(
     app_states: Arc<TAppSates>,
     addr: SocketAddr,
-    sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
-    connections: Arc<ConnectionsList<TContract>>,
+    sender: Arc<UnboundedSender<ConnectionEvent<TContract, TSerializer>>>,
+    connections: Arc<ConnectionsList<TContract, TSerializer>>,
     serializer_factory: Arc<TSerializeFactory>,
     logger: Arc<MyLogger>,
     context_name: String,
@@ -128,6 +132,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactor
 
                 let connection = Arc::new(SocketConnection::new(
                     write_socket,
+                    serializer_factory(),
                     connection_id,
                     Some(socket_addr),
                     sender.clone(),
@@ -138,7 +143,6 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactor
                     read_socket,
                     connection,
                     connections.clone(),
-                    serializer_factory(),
                     logger.clone(),
                     log_context,
                 ));
@@ -158,9 +162,8 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactor
 
 pub async fn handle_new_connection<TContract, TSerializer>(
     read_socket: ReadHalf<TcpStream>,
-    connection: Arc<SocketConnection<TContract>>,
-    connections: Arc<ConnectionsList<TContract>>,
-    serializer: TSerializer,
+    connection: Arc<SocketConnection<TContract, TSerializer>>,
+    connections: Arc<ConnectionsList<TContract, TSerializer>>,
     logger: Arc<MyLogger>,
     log_context: String,
 ) where
@@ -174,7 +177,6 @@ pub async fn handle_new_connection<TContract, TSerializer>(
     crate::tcp_connection::new_connection::start(
         read_socket,
         connection,
-        serializer,
         None,
         Duration::from_secs(60),
         logger.clone(),

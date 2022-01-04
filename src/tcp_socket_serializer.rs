@@ -10,4 +10,6 @@ pub trait TcpSocketSerializer<TContract> {
         &mut self,
         socket_reader: &mut TSocketReader,
     ) -> Result<TContract, ReadingTcpContractFail>;
+
+    fn apply_packet(&self, contract: &TContract);
 }

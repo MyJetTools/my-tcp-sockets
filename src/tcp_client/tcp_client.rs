@@ -75,7 +75,7 @@ impl TcpClient {
     pub fn start<TContract, TSerializer, TSerializeFactory>(
         &self,
         serializer_factory: Arc<TSerializeFactory>,
-    ) -> ConnectionCallback<TContract>
+    ) -> ConnectionCallback<TContract, TSerializer>
     where
         TContract: Send + Sync + 'static,
         TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -100,7 +100,7 @@ impl TcpClient {
 async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
     host_port: String,
     connect_timeout: Duration,
-    sender: Arc<UnboundedSender<ConnectionEvent<TContract>>>,
+    sender: Arc<UnboundedSender<ConnectionEvent<TContract, TSerializer>>>,
     serializer_factory: Arc<TSerializeFactory>,
     seconds_to_ping: usize,
     disconnect_timeout: Duration,
@@ -142,8 +142,12 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
 
                 let (read_socket, write_socket) = io::split(tcp_stream);
 
+                let serializer = serializer_factory();
+                let ping_packet = serializer.get_ping_payload();
+
                 let connection = Arc::new(SocketConnection::new(
                     write_socket,
+                    serializer,
                     connection_id,
                     None,
                     sender.clone(),
@@ -151,17 +155,14 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
                     log_context.clone(),
                 ));
 
-                let serializer = serializer_factory();
-
                 let ping_data = PingData {
                     seconds_to_ping,
-                    ping_packet: serializer.get_ping_payload(),
+                    ping_packet,
                 };
 
                 crate::tcp_connection::new_connection::start(
                     read_socket,
                     connection.clone(),
-                    serializer,
                     Some(ping_data),
                     disconnect_timeout,
                     logger.clone(),
