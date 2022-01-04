@@ -8,4 +8,4 @@ pub use tcp_client::TcpClient;
 pub use tcp_server::TcpServer;
 
 pub use tcp_socket_serializer::TcpSocketSerializer;
-pub use types::ConnectionId;
+pub use types::{ApplicationStates, ConnectionId};
