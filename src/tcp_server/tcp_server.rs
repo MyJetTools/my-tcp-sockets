@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use my_logger::{GetMyLoggerReader, LogLevel, MyLogger};
+use rust_extensions::ApplicationStates;
 use tokio::{
     io::{self, AsyncWriteExt, ReadHalf},
     net::{TcpListener, TcpStream},
@@ -9,7 +10,6 @@ use tokio::{
 
 use crate::{
     tcp_connection::{ConnectionCallback, ConnectionEvent, SocketConnection},
-    types::ApplicationStates,
     ConnectionId, TcpSocketSerializer,
 };
 
