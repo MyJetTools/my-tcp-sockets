@@ -50,7 +50,11 @@ where
         socket_reader.start_calculating_read_size();
 
         let contract = read_serializer.deserialize(&mut socket_reader).await?;
-        read_serializer.apply_packet(&contract);
+        let state_is_changed = read_serializer.apply_packet(&contract);
+
+        if state_is_changed {
+            connection.apply_payload_to_serializer(&contract).await;
+        }
 
         connection
             .statistics
