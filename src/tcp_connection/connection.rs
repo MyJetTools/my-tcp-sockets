@@ -97,7 +97,7 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
 
         match &mut *write_access {
             Some(socket_data) => {
-                let payload = socket_data.serializer.serialize(&payload);
+                let payload = socket_data.serializer.serialize(payload);
                 self.send_package(&mut write_access, payload.as_slice())
                     .await
             }

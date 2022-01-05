@@ -153,7 +153,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
                 let ping_data = PingData {
                     seconds_to_ping,
-                    ping_packet: read_serializer.serialize(&connection.ping_packet),
+                    ping_packet: read_serializer.serialize(read_serializer.get_ping()),
                 };
 
                 crate::tcp_connection::new_connection::start(
