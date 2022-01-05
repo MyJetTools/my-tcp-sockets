@@ -115,7 +115,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactor
     }
 
     let listener = TcpListener::bind(addr).await.unwrap();
-    let connection_id: ConnectionId = 0;
+    let mut connection_id: ConnectionId = 0;
 
     loop {
         match listener.accept().await {
@@ -147,6 +147,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactor
                     logger.clone(),
                     log_context,
                 ));
+                connection_id += 1;
             }
             Err(err) => logger.write_log(
                 LogLevel::FatalError,
