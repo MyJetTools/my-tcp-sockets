@@ -3,14 +3,13 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use my_logger::{LogLevel, MyLogger};
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::{io::WriteHalf, net::TcpStream, sync::Mutex};
 
 use tokio::io::AsyncWriteExt;
 
 use crate::{ConnectionId, TcpSocketSerializer};
 
-use super::{ConnectionEvent, ConnectionName, ConnectionStatistics};
+use super::{ConnectionName, ConnectionStatistics};
 
 pub struct SocketData<TSerializer> {
     tcp_stream: WriteHalf<TcpStream>,
@@ -23,16 +22,19 @@ impl<TSerializer> SocketData<TSerializer> {
     }
 }
 
-pub struct SocketConnection<TContract, TSerializer: TcpSocketSerializer<TContract>> {
+pub struct SocketConnection<TContract, TSerializer>
+where
+    TSerializer: TcpSocketSerializer<TContract>,
+{
     pub socket: Mutex<Option<SocketData<TSerializer>>>,
     pub addr: Option<SocketAddr>,
     pub id: ConnectionId,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
-    sender: Arc<UnboundedSender<ConnectionEvent<TContract, TSerializer>>>,
     logger: Arc<MyLogger>,
     log_context: String,
     pub connection_name: Arc<ConnectionName>,
+    pub ping_packet: TContract,
 }
 
 impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
@@ -43,10 +45,11 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
         serializer: TSerializer,
         id: ConnectionId,
         addr: Option<SocketAddr>,
-        sender: Arc<UnboundedSender<ConnectionEvent<TContract, TSerializer>>>,
         logger: Arc<MyLogger>,
         log_context: String,
     ) -> Self {
+        let ping_packet = serializer.get_ping();
+
         let socket_data = SocketData {
             tcp_stream: socket,
             serializer,
@@ -58,36 +61,11 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
             addr,
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),
-            sender,
+
             logger,
             log_context,
             connection_name: Arc::new(ConnectionName::new(format!("{:?}", addr))),
-        }
-    }
-
-    pub fn callback_event(&self, event: ConnectionEvent<TContract, TSerializer>) {
-        if let Err(err) = self.sender.send(event) {
-            let connection_name = self.connection_name.clone();
-            let logger = self.logger.clone();
-            let connection_id = self.id;
-            let log_context = self.log_context.clone();
-            let message = format!(
-                "Error by sending callback to the connection: {}. Err: {}",
-                connection_id, err
-            );
-
-            tokio::spawn(async move {
-                let connection_name = connection_name.get().await;
-                logger.write_log(
-                    LogLevel::FatalError,
-                    "Tcp Accept Socket".to_string(),
-                    message,
-                    Some(format!(
-                        "{}; ConnectionName:{}",
-                        log_context, connection_name
-                    )),
-                )
-            });
+            ping_packet,
         }
     }
 
@@ -119,7 +97,7 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
 
         match &mut *write_access {
             Some(socket_data) => {
-                let payload = socket_data.serializer.serialize(payload);
+                let payload = socket_data.serializer.serialize(&payload);
                 self.send_package(&mut write_access, payload.as_slice())
                     .await
             }

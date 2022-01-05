@@ -3,14 +3,15 @@ use std::{sync::Arc, time::Duration};
 use my_logger::{LogLevel, MyLogger};
 use tokio::{io::ReadHalf, net::TcpStream};
 
-use crate::TcpSocketSerializer;
+use crate::{SocketEventCallback, TcpSocketSerializer};
 
 use super::{ping_loop::PingData, SocketConnection};
 
-pub async fn start<TContract, TSerializer>(
+pub async fn start<TContract, TSerializer, TSocketCallback>(
     read_socket: ReadHalf<TcpStream>,
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     read_serializer: TSerializer,
+    socket_callback: Arc<TSocketCallback>,
     ping_data: Option<PingData>,
     disconnect_timeout: Duration,
     logger: Arc<MyLogger>,
@@ -18,6 +19,7 @@ pub async fn start<TContract, TSerializer>(
 ) where
     TContract: Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
     let ping_handle = tokio::spawn(crate::tcp_connection::ping_loop::start(
         connection.clone(),
@@ -33,6 +35,7 @@ pub async fn start<TContract, TSerializer>(
         read_socket,
         connection,
         read_serializer,
+        socket_callback.clone(),
         logger.clone(),
         log_context.clone(),
     )

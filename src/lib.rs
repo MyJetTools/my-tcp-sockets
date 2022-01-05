@@ -6,6 +6,8 @@ mod tcp_socket_serializer;
 mod types;
 pub use tcp_client::TcpClient;
 pub use tcp_server::TcpServer;
+mod socket_event_callback;
 
+pub use socket_event_callback::{ConnectionEvent, SocketEventCallback};
 pub use tcp_socket_serializer::TcpSocketSerializer;
 pub use types::ConnectionId;
