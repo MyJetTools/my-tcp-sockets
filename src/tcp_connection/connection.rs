@@ -8,7 +8,6 @@ use tokio::{io::WriteHalf, net::TcpStream, sync::Mutex};
 
 use tokio::io::AsyncWriteExt;
 
-use crate::socket_reader::{ReadingTcpContractFail, SocketReader};
 use crate::{ConnectionId, TcpSocketSerializer};
 
 use super::{ConnectionEvent, ConnectionName, ConnectionStatistics};
@@ -128,25 +127,17 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
         }
     }
 
-    pub async fn deserialize<TSocketReader: Send + Sync + 'static + SocketReader>(
-        &self,
-        socket_reader: &mut TSocketReader,
-    ) -> Result<TContract, ReadingTcpContractFail> {
-        let mut write_access = self.socket.lock().await;
-
-        match &mut *write_access {
-            Some(socket_data) => {
-                let packet = socket_data.serializer.deserialize(socket_reader).await?;
-                socket_data.serializer.apply_packet(&packet);
-                Ok(packet)
-            }
-            None => Err(ReadingTcpContractFail::SocketDisconnected),
-        }
-    }
-
     pub async fn send_bytes(&self, payload: &[u8]) -> bool {
         let mut write_access = self.socket.lock().await;
         self.send_package(&mut write_access, payload).await
+    }
+
+    pub async fn apply_payload_to_serializer(&self, contract: &TContract) {
+        let mut write_access = self.socket.lock().await;
+
+        if let Some(socket_data) = &mut *write_access {
+            socket_data.serializer.apply_packet(contract);
+        }
     }
 
     async fn send_package(

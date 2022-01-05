@@ -142,12 +142,9 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
 
                 let (read_socket, write_socket) = io::split(tcp_stream);
 
-                let serializer = serializer_factory();
-                let ping_packet = serializer.get_ping_payload();
-
                 let connection = Arc::new(SocketConnection::new(
                     write_socket,
-                    serializer,
+                    serializer_factory(),
                     connection_id,
                     None,
                     sender.clone(),
@@ -155,6 +152,8 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
                     log_context.clone(),
                 ));
 
+                let read_serializer = serializer_factory();
+                let ping_packet = read_serializer.get_ping_payload();
                 let ping_data = PingData {
                     seconds_to_ping,
                     ping_packet,
@@ -163,6 +162,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory>(
                 crate::tcp_connection::new_connection::start(
                     read_socket,
                     connection.clone(),
+                    read_serializer,
                     Some(ping_data),
                     disconnect_timeout,
                     logger.clone(),

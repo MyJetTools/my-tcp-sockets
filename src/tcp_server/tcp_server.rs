@@ -143,6 +143,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TAppSates, TSerializeFactor
                     read_socket,
                     connection,
                     connections.clone(),
+                    serializer_factory(),
                     logger.clone(),
                     log_context,
                 ));
@@ -164,6 +165,7 @@ pub async fn handle_new_connection<TContract, TSerializer>(
     read_socket: ReadHalf<TcpStream>,
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     connections: Arc<ConnectionsList<TContract, TSerializer>>,
+    read_serializer: TSerializer,
     logger: Arc<MyLogger>,
     log_context: String,
 ) where
@@ -177,6 +179,7 @@ pub async fn handle_new_connection<TContract, TSerializer>(
     crate::tcp_connection::new_connection::start(
         read_socket,
         connection,
+        read_serializer,
         None,
         Duration::from_secs(60),
         logger.clone(),

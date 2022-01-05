@@ -10,6 +10,7 @@ use super::{ping_loop::PingData, SocketConnection};
 pub async fn start<TContract, TSerializer>(
     read_socket: ReadHalf<TcpStream>,
     connection: Arc<SocketConnection<TContract, TSerializer>>,
+    read_serializer: TSerializer,
     ping_data: Option<PingData>,
     disconnect_timeout: Duration,
     logger: Arc<MyLogger>,
@@ -31,6 +32,7 @@ pub async fn start<TContract, TSerializer>(
     crate::tcp_connection::read_loop::start(
         read_socket,
         connection,
+        read_serializer,
         logger.clone(),
         log_context.clone(),
     )

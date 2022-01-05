@@ -13,6 +13,7 @@ use crate::{
 pub async fn start<TContract, TSerializer>(
     read_socket: ReadHalf<TcpStream>,
     connection: Arc<SocketConnection<TContract, TSerializer>>,
+    read_serializer: TSerializer,
     logger: Arc<MyLogger>,
     log_context: String,
 ) where
@@ -21,7 +22,8 @@ pub async fn start<TContract, TSerializer>(
 {
     connection.callback_event(ConnectionEvent::Connected(connection.clone()));
 
-    let read_result = tokio::spawn(read_loop(read_socket, connection.clone())).await;
+    let read_result =
+        tokio::spawn(read_loop(read_socket, connection.clone(), read_serializer)).await;
 
     if let Err(err) = read_result {
         logger.write_log(
@@ -38,6 +40,7 @@ pub async fn start<TContract, TSerializer>(
 async fn read_loop<TContract, TSerializer>(
     tcp_stream: ReadHalf<TcpStream>,
     connection: Arc<SocketConnection<TContract, TSerializer>>,
+    mut read_serializer: TSerializer,
 ) -> Result<(), ReadingTcpContractFail>
 where
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -46,7 +49,8 @@ where
     loop {
         socket_reader.start_calculating_read_size();
 
-        let contract = connection.deserialize(&mut socket_reader).await?;
+        let contract = read_serializer.deserialize(&mut socket_reader).await?;
+        read_serializer.apply_packet(&contract);
 
         connection
             .statistics
