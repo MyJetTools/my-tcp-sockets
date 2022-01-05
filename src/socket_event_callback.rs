@@ -15,5 +15,5 @@ pub enum ConnectionEvent<TContract, TSerializer: TcpSocketSerializer<TContract>>
 
 #[async_trait]
 pub trait SocketEventCallback<TContract, TSerializer: TcpSocketSerializer<TContract>> {
-    async fn handle(&self, socket_reader: ConnectionEvent<TContract, TSerializer>);
+    async fn handle(&self, connection_event: ConnectionEvent<TContract, TSerializer>);
 }
