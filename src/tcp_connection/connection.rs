@@ -105,6 +105,19 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
         }
     }
 
+    pub async fn send_ref(&self, payload: &TContract) -> bool {
+        let mut write_access = self.socket.lock().await;
+
+        match &mut *write_access {
+            Some(socket_data) => {
+                let payload = socket_data.serializer.serialize_ref(payload);
+                self.send_package(&mut write_access, payload.as_slice())
+                    .await
+            }
+            None => false,
+        }
+    }
+
     pub async fn send_bytes(&self, payload: &[u8]) -> bool {
         let mut write_access = self.socket.lock().await;
         self.send_package(&mut write_access, payload).await

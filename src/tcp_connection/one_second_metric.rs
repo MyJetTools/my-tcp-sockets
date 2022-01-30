@@ -23,7 +23,7 @@ impl OneSecondMetric {
     }
 
     pub fn get_value(&self) -> usize {
-        self.value.load(Ordering::SeqCst)
+        self.value.load(Ordering::Relaxed)
     }
 }
 
