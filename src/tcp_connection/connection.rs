@@ -9,7 +9,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::{ConnectionId, TcpSocketSerializer};
 
-use super::{ConnectionName, ConnectionStatistics};
+use super::ConnectionStatistics;
 
 pub struct SocketData<TSerializer> {
     tcp_stream: WriteHalf<TcpStream>,
@@ -33,7 +33,6 @@ where
     pub statistics: ConnectionStatistics,
     logger: Arc<MyLogger>,
     log_context: String,
-    pub connection_name: Arc<ConnectionName>,
     pub ping_packet: TContract,
 }
 
@@ -64,7 +63,6 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
 
             logger,
             log_context,
-            connection_name: Arc::new(ConnectionName::new(format!("{:?}", addr))),
             ping_packet,
         }
     }
