@@ -37,7 +37,7 @@ impl TcpClient {
         }
     }
 
-    pub fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback, TAppSates, TLogger>(
+    pub fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
         &self,
         serializer_factory: Arc<TSerializeFactory>,
         socket_callback: Arc<TSocketCallback>,
