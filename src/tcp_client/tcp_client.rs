@@ -1,15 +1,18 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use my_logger::{LogLevel, MyLogger};
+use rust_extensions::{ApplicationStates, Logger};
 use tokio::net::TcpStream;
 
 use tokio::io;
 
 use crate::{
-    tcp_connection::{ping_loop::PingData, SocketConnection},
+    tcp_connection::{ping_loop::PingData, FlushToSocketEventLoop, SocketConnection},
     ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
+
+const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
+const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct TcpClient {
     host_port: String,
@@ -17,7 +20,8 @@ pub struct TcpClient {
     seconds_to_ping: usize,
     disconnect_timeout: Duration,
     name: String,
-    pub logger: Arc<MyLogger>,
+    max_send_payload_size: usize,
+    send_timeout: Duration,
 }
 
 impl TcpClient {
@@ -27,26 +31,18 @@ impl TcpClient {
             connect_timeout: Duration::from_secs(3),
             seconds_to_ping: 3,
             disconnect_timeout: Duration::from_secs(9),
-            logger: Arc::new(MyLogger::to_concole()),
             name,
+            max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
+            send_timeout: DEFAULT_SEND_TIMEOUT,
         }
     }
 
-    pub fn new_with_logger(name: String, host_port: String, logger: Arc<MyLogger>) -> Self {
-        Self {
-            host_port,
-            connect_timeout: Duration::from_secs(3),
-            seconds_to_ping: 3,
-            disconnect_timeout: Duration::from_secs(9),
-            logger,
-            name,
-        }
-    }
-
-    pub fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
+    pub fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback, TAppSates, TLogger>(
         &self,
         serializer_factory: Arc<TSerializeFactory>,
         socket_callback: Arc<TSocketCallback>,
+        app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
+        logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
         TContract: Send + Sync + 'static,
         TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -60,8 +56,11 @@ impl TcpClient {
             socket_callback,
             self.seconds_to_ping,
             self.disconnect_timeout,
-            self.logger.clone(),
             self.name.clone(),
+            self.max_send_payload_size,
+            self.send_timeout,
+            app_states,
+            logger,
         ));
     }
 }
@@ -73,8 +72,11 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
     socket_callback: Arc<TSocketCallback>,
     seconds_to_ping: usize,
     disconnect_timeout: Duration,
-    logger: Arc<MyLogger>,
     socket_name: String,
+    max_send_payload_size: usize,
+    send_timeout: Duration,
+    app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
+    logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
     TContract: Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -83,31 +85,25 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 {
     let mut connection_id: ConnectionId = 0;
 
+    let socket_context = Some(format!("{}", socket_name));
+
     const LOG_PROCESS: &str = "Tcp Client Connect";
     loop {
         tokio::time::sleep(connect_timeout).await;
 
-        logger.write_log(
-            LogLevel::Info,
+        logger.write_info(
             LOG_PROCESS.to_string(),
             format!("Trying to connect to {}", host_port),
-            Some(format!(
-                "TcpClient:{}. HostPort:{}",
-                socket_name.as_str(),
-                host_port
-            )),
+            socket_context.clone(),
         );
         let connect_result = TcpStream::connect(host_port.as_str()).await;
 
         match connect_result {
             Ok(tcp_stream) => {
-                let log_context = format!("ClientConnection:{}. Id:{}", socket_name, connection_id);
-
-                logger.write_log(
-                    LogLevel::Info,
+                logger.write_info(
                     LOG_PROCESS.to_string(),
                     format!("Connected to {}. Id: {}", host_port, connection_id),
-                    Some(log_context.clone()),
+                    socket_context.clone(),
                 );
 
                 let (read_socket, write_socket) = io::split(tcp_stream);
@@ -118,8 +114,20 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                     connection_id,
                     None,
                     logger.clone(),
-                    log_context.clone(),
+                    max_send_payload_size,
+                    send_timeout,
+                    socket_context.clone(),
                 ));
+
+                connection
+                    .send_to_socket_event_loop
+                    .register_event_loop(Arc::new(FlushToSocketEventLoop::new(connection.clone())))
+                    .await;
+
+                connection
+                    .send_to_socket_event_loop
+                    .start(app_states.clone(), logger.clone())
+                    .await;
 
                 let read_serializer = serializer_factory();
 
@@ -136,24 +144,22 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                     Some(ping_data),
                     disconnect_timeout,
                     logger.clone(),
-                    log_context.clone(),
+                    socket_context.clone(),
                 )
                 .await;
 
-                logger.write_log(
-                    LogLevel::Info,
+                logger.write_info(
                     LOG_PROCESS.to_string(),
                     format!("Disconnected from {}", host_port),
-                    Some(log_context),
+                    socket_context.clone(),
                 );
                 connection_id += 1;
             }
             Err(err) => {
-                logger.write_log(
-                    LogLevel::Error,
+                logger.write_error(
                     LOG_PROCESS.to_string(),
                     format!("Can not connect to {}. Reason: {}", host_port, err),
-                    Some(format!("TcpClient:{}. HostPort:{}", socket_name, host_port)),
+                    socket_context.clone(),
                 );
             }
         }

@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use crate::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 #[async_trait]
-pub trait TcpSocketSerializer<TContract> {
+pub trait TcpSocketSerializer<TContract: Send + Sync + 'static> {
     fn serialize(&self, contract: TContract) -> Vec<u8>;
     fn serialize_ref(&self, contract: &TContract) -> Vec<u8>;
 

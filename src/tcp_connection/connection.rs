@@ -1,58 +1,52 @@
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
-use my_logger::{LogLevel, MyLogger};
+use rust_extensions::events_loop::EventsLoop;
+use rust_extensions::Logger;
 use tokio::{io::WriteHalf, net::TcpStream, sync::Mutex};
 
 use tokio::io::AsyncWriteExt;
 
 use crate::{ConnectionId, TcpSocketSerializer};
 
-use super::ConnectionStatistics;
+use super::{ConnectionStatistics, SocketData};
 
-pub struct SocketData<TSerializer> {
-    tcp_stream: WriteHalf<TcpStream>,
-    serializer: TSerializer,
-}
-
-impl<TSerializer> SocketData<TSerializer> {
-    pub fn get_serializer(&self) -> &TSerializer {
-        &self.serializer
-    }
-}
-
-pub struct SocketConnection<TContract, TSerializer>
+pub struct SocketConnection<TContract: Send + Sync + 'static, TSerializer>
 where
-    TSerializer: TcpSocketSerializer<TContract>,
+    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
 {
     pub socket: Mutex<Option<SocketData<TSerializer>>>,
     pub addr: Option<SocketAddr>,
     pub id: ConnectionId,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
-    logger: Arc<MyLogger>,
-    log_context: String,
+    logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub ping_packet: TContract,
+    pub send_timeout: Duration,
+    pub send_to_socket_event_loop: EventsLoop<()>,
+    socket_context: Option<String>,
 }
 
-impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
-    SocketConnection<TContract, TSerializer>
+impl<
+        TContract: Send + Sync + 'static,
+        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    > SocketConnection<TContract, TSerializer>
 {
     pub fn new(
         socket: WriteHalf<TcpStream>,
         serializer: TSerializer,
         id: ConnectionId,
         addr: Option<SocketAddr>,
-        logger: Arc<MyLogger>,
-        log_context: String,
+        logger: Arc<dyn Logger + Send + Sync + 'static>,
+        max_send_payload_size: usize,
+        send_timeout: Duration,
+        socket_context: Option<String>,
     ) -> Self {
         let ping_packet = serializer.get_ping();
 
-        let socket_data = SocketData {
-            tcp_stream: socket,
-            serializer,
-        };
+        let socket_data = SocketData::new(socket, serializer, max_send_payload_size);
 
         Self {
             socket: Mutex::new(Some(socket_data)),
@@ -62,8 +56,11 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
             statistics: ConnectionStatistics::new(),
 
             logger,
-            log_context,
+
             ping_packet,
+            send_timeout,
+            send_to_socket_event_loop: EventsLoop::new(format!("Connection {}", id)),
+            socket_context,
         }
     }
 
@@ -81,8 +78,8 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
         process_disconnect(
             &mut write_access,
             self.id,
-            self.logger.as_ref(),
-            self.log_context.as_str(),
+            &self.logger,
+            &self.socket_context,
         )
         .await;
 
@@ -90,117 +87,91 @@ impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
         return true;
     }
 
-    pub async fn send(&self, payload: TContract) -> bool {
+    pub async fn send(&self, payload: TContract) {
         let mut write_access = self.socket.lock().await;
 
-        match &mut *write_access {
-            Some(socket_data) => {
-                let payload = socket_data.serializer.serialize(payload);
-                self.send_package(&mut write_access, payload.as_slice())
-                    .await
-            }
-            None => false,
+        if let Some(socket_data) = write_access.as_mut() {
+            let payload = socket_data.get_serializer().serialize(payload);
+            socket_data.tcp_payloads.add_payload(payload.as_slice());
+            self.statistics
+                .pending_to_send_buffer_size
+                .store(socket_data.tcp_payloads.get_size(), Ordering::SeqCst);
         }
     }
 
-    pub async fn send_ref(&self, payload: &TContract) -> bool {
+    pub async fn send_ref(&self, payload: &TContract) {
         let mut write_access = self.socket.lock().await;
-
-        match &mut *write_access {
-            Some(socket_data) => {
-                let payload = socket_data.serializer.serialize_ref(payload);
-                self.send_package(&mut write_access, payload.as_slice())
-                    .await
-            }
-            None => false,
+        if let Some(socket_data) = write_access.as_mut() {
+            let payload = socket_data.get_serializer().serialize_ref(payload);
+            socket_data.tcp_payloads.add_payload(payload.as_ref());
+            self.statistics
+                .pending_to_send_buffer_size
+                .store(socket_data.tcp_payloads.get_size(), Ordering::SeqCst);
         }
     }
 
-    pub async fn send_bytes(&self, payload: &[u8]) -> bool {
+    pub async fn send_bytes(&self, payload: &[u8]) {
         let mut write_access = self.socket.lock().await;
-        self.send_package(&mut write_access, payload).await
+        if let Some(socket_data) = write_access.as_mut() {
+            socket_data.tcp_payloads.add_payload(payload);
+            self.statistics
+                .pending_to_send_buffer_size
+                .store(socket_data.tcp_payloads.get_size(), Ordering::SeqCst);
+        }
     }
 
     pub async fn apply_payload_to_serializer(&self, contract: &TContract) {
         let mut write_access = self.socket.lock().await;
 
         if let Some(socket_data) = &mut *write_access {
-            socket_data.serializer.apply_packet(contract);
+            socket_data.get_serializer_mut().apply_packet(contract);
         }
     }
 
-    async fn send_package(
-        &self,
-        write_access: &mut Option<SocketData<TSerializer>>,
-        payload: &[u8],
-    ) -> bool {
-        match &mut *write_access {
-            Some(socket_data) => {
-                if send_bytes(
-                    &mut socket_data.tcp_stream,
-                    self.id,
-                    payload,
-                    self.logger.as_ref(),
-                    self.log_context.as_str(),
-                )
+    pub async fn flush_to_socket(&self) {
+        let mut write_access = self.socket.lock().await;
+
+        if let Some(socket_data) = &mut *write_access {
+            if let Err(err) = socket_data
+                .flush_to_socket(&self.statistics, self.send_timeout)
                 .await
-                {
-                    self.statistics.update_sent_amount(payload.len());
-                    true
-                } else {
-                    process_disconnect(
-                        write_access,
-                        self.id,
-                        self.logger.as_ref(),
-                        self.log_context.as_str(),
-                    )
-                    .await;
-                    false
-                }
+            {
+                self.logger.write_info(
+                    "flush_to_socket".to_string(),
+                    format!(
+                        "Error while sending to socket socket {}. Err: {:?}",
+                        self.id, err
+                    ),
+                    self.socket_context.clone(),
+                );
+                process_disconnect(
+                    &mut *write_access,
+                    self.id,
+                    &self.logger,
+                    &self.socket_context,
+                )
+                .await;
             }
-            None => false,
-        }
-    }
-}
-
-async fn send_bytes(
-    tcp_stream: &mut WriteHalf<TcpStream>,
-    id: ConnectionId,
-    payload: &[u8],
-    logger: &MyLogger,
-    log_context: &str,
-) -> bool {
-    match tcp_stream.write_all(payload).await {
-        Ok(_) => true,
-        Err(err) => {
-            logger.write_log(
-                LogLevel::Info,
-                "TcpConnection::send_bytes".to_string(),
-                format!("Can not send payload to socket {}. Err: {}", id, err),
-                Some(log_context.to_string()),
-            );
-            false
         }
     }
 }
 
 async fn process_disconnect<TSerializer>(
-    tcp_stream: &mut Option<SocketData<TSerializer>>,
+    socket_data: &mut Option<SocketData<TSerializer>>,
     id: ConnectionId,
-    logger: &MyLogger,
-    log_context: &str,
+    logger: &Arc<dyn Logger + Send + Sync + 'static>,
+    context: &Option<String>,
 ) {
     let mut result = None;
-    std::mem::swap(&mut result, tcp_stream);
+    std::mem::swap(&mut result, socket_data);
 
     let mut result = result.unwrap();
 
     if let Err(err) = result.tcp_stream.shutdown().await {
-        logger.write_log(
-            LogLevel::Info,
+        logger.write_info(
             "process_disconnect".to_string(),
             format!("Error while disconnecting socket {}. Err: {}", id, err),
-            Some(log_context.to_string()),
+            context.clone(),
         );
     }
 }

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use my_logger::MyLogger;
-use rust_extensions::date_time::DateTimeAsMicroseconds;
+use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 use tokio::{io::ReadHalf, net::TcpStream};
 
 use crate::{
@@ -15,8 +14,8 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     read_serializer: TSerializer,
     socket_callback: Arc<TSocketCallback>,
-    logger: Arc<MyLogger>,
-    log_context: String,
+    logger: Arc<dyn Logger + Send + Sync + 'static>,
+    socket_context: Option<String>,
 ) where
     TContract: Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -35,14 +34,14 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     .await;
 
     if let Err(err) = read_result {
-        logger.write_log(
-            my_logger::LogLevel::FatalError,
+        logger.write_error(
             "Socket Read Loop".to_string(),
             format!("Socket {} loop exit with error: {}", connection.id, err),
-            Some(log_context),
+            socket_context.clone(),
         );
     }
 
+    connection.send_to_socket_event_loop.stop();
     socket_callback
         .handle(ConnectionEvent::Disconnected(connection.clone()))
         .await;

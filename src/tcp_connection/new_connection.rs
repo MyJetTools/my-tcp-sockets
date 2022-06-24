@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use my_logger::{LogLevel, MyLogger};
+use rust_extensions::Logger;
 use tokio::{io::ReadHalf, net::TcpStream};
 
 use crate::{SocketEventCallback, TcpSocketSerializer};
@@ -14,8 +14,8 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     socket_callback: Arc<TSocketCallback>,
     ping_data: Option<PingData>,
     disconnect_timeout: Duration,
-    logger: Arc<MyLogger>,
-    log_context: String,
+    logger: Arc<dyn Logger + Send + Sync + 'static>,
+    socket_context: Option<String>,
 ) where
     TContract: Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -26,30 +26,29 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
         ping_data,
         disconnect_timeout,
         logger.clone(),
-        log_context.clone(),
+        socket_context.clone(),
     ));
 
     let connection_id = connection.id;
 
     crate::tcp_connection::read_loop::start(
         read_socket,
-        connection,
+        connection.clone(),
         read_serializer,
         socket_callback.clone(),
         logger.clone(),
-        log_context.clone(),
+        socket_context.clone(),
     )
     .await;
 
     if let Err(err) = ping_handle.await {
-        logger.write_log(
-            LogLevel::FatalError,
+        logger.write_error(
             "Connection handler".to_string(),
             format!(
                 "Socket ping {} loop exit with error: {}",
                 connection_id, err
             ),
-            Some(log_context),
+            socket_context.clone(),
         );
     };
 }

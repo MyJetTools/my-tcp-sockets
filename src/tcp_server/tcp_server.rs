@@ -1,23 +1,30 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use my_logger::{LogLevel, MyLogger};
-use rust_extensions::ApplicationStates;
+use rust_extensions::{ApplicationStates, Logger};
 use tokio::{
     io::{self, AsyncWriteExt, ReadHalf},
     net::{TcpListener, TcpStream},
 };
 
 use crate::{
-    tcp_connection::SocketConnection, ConnectionId, SocketEventCallback, TcpSocketSerializer,
+    tcp_connection::{FlushToSocketEventLoop, SocketConnection},
+    ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
 
 use super::ConnectionsList;
 
-pub struct TcpServer<TContract, TSerializer: TcpSocketSerializer<TContract>> {
+const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
+const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
+
+pub struct TcpServer<
+    TContract: Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+> {
     addr: SocketAddr,
     pub connections: Arc<ConnectionsList<TContract, TSerializer>>,
     name: String,
-    pub logger: Arc<MyLogger>,
+    max_send_payload_size: usize,
+    send_timeout: Duration,
 }
 
 impl<TContract, TSerializer> TcpServer<TContract, TSerializer>
@@ -30,57 +37,46 @@ where
             name,
             addr,
             connections: Arc::new(ConnectionsList::new()),
-            logger: Arc::new(MyLogger::to_concole()),
+            max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
+            send_timeout: DEFAULT_SEND_TIMEOUT,
         }
     }
 
-    pub fn new_with_logger(name: String, addr: SocketAddr, logger: Arc<MyLogger>) -> Self {
-        Self {
-            name,
-            addr,
-            connections: Arc::new(ConnectionsList::new()),
-            logger,
-        }
-    }
-
-    pub async fn start<TAppSates, TSerializeFactory, TSocketCallback>(
+    pub async fn start<TSerializeFactory, TSocketCallback>(
         &self,
-        app_states: Arc<TAppSates>,
         serializer_factory: Arc<TSerializeFactory>,
         socket_callback: Arc<TSocketCallback>,
+        app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
+        logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
-        TAppSates: Send + Sync + 'static + ApplicationStates,
         TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
         TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
     {
         tokio::spawn(accept_sockets_loop(
-            app_states,
             self.addr,
             self.connections.clone(),
             serializer_factory.clone(),
             socket_callback.clone(),
-            self.logger.clone(),
             self.name.clone(),
+            self.max_send_payload_size,
+            self.send_timeout,
+            app_states,
+            logger,
         ));
     }
 }
 
-async fn accept_sockets_loop<
-    TContract,
-    TSerializer,
-    TAppSates,
-    TSerializeFactory,
-    TSocketCallback,
->(
-    app_states: Arc<TAppSates>,
+async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
     addr: SocketAddr,
     connections: Arc<ConnectionsList<TContract, TSerializer>>,
     serializer_factory: Arc<TSerializeFactory>,
     socket_callback: Arc<TSocketCallback>,
-    logger: Arc<MyLogger>,
     context_name: String,
+    max_send_payload_size: usize,
+    send_timeout: Duration,
+    app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
+    logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
-    TAppSates: Send + Sync + 'static + ApplicationStates,
     TContract: Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSerializeFactory: Fn() -> TSerializer,
@@ -103,8 +99,10 @@ async fn accept_sockets_loop<
                     break;
                 }
 
-                let log_context =
-                    format!("ServerConnection:{}. Id:{}", context_name, connection_id);
+                let log_context = Some(format!(
+                    "ServerConnection:{}. Id:{}",
+                    context_name, connection_id
+                ));
 
                 let connection = Arc::new(SocketConnection::new(
                     write_socket,
@@ -112,27 +110,36 @@ async fn accept_sockets_loop<
                     connection_id,
                     Some(socket_addr),
                     logger.clone(),
+                    max_send_payload_size,
+                    send_timeout,
                     log_context.clone(),
                 ));
+
+                connection
+                    .send_to_socket_event_loop
+                    .register_event_loop(Arc::new(FlushToSocketEventLoop::new(connection.clone())))
+                    .await;
+
+                connection
+                    .send_to_socket_event_loop
+                    .start(app_states.clone(), logger.clone())
+                    .await;
+
                 tokio::task::spawn(handle_new_connection(
                     read_socket,
                     connection,
                     connections.clone(),
                     serializer_factory(),
                     logger.clone(),
-                    log_context,
                     socket_callback.clone(),
+                    log_context.clone(),
                 ));
                 connection_id += 1;
             }
-            Err(err) => logger.write_log(
-                LogLevel::FatalError,
+            Err(err) => logger.write_error(
                 "Tcp Accept Socket".to_string(),
                 format!("Can not accept socket. Err:{}", err),
-                Some(format!(
-                    "TcpServerSocket:{}, EndPoint:{}",
-                    context_name, addr
-                )),
+                format!("ServerConnection: {}.", context_name).into(),
             ),
         }
     }
@@ -143,9 +150,9 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     connections: Arc<ConnectionsList<TContract, TSerializer>>,
     read_serializer: TSerializer,
-    logger: Arc<MyLogger>,
-    log_context: String,
+    logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
+    socket_context: Option<String>,
 ) where
     TContract: Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -163,7 +170,7 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
         None,
         Duration::from_secs(60),
         logger.clone(),
-        log_context,
+        socket_context.clone(),
     )
     .await;
     connections.remove(id).await;

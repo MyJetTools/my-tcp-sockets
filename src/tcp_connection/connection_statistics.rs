@@ -13,6 +13,7 @@ pub struct ConnectionStatistics {
     pub total_sent: AtomicUsize,
     pub received_per_sec: OneSecondMetric,
     pub sent_per_sec: OneSecondMetric,
+    pub pending_to_send_buffer_size: AtomicUsize,
 }
 
 impl ConnectionStatistics {
@@ -27,6 +28,7 @@ impl ConnectionStatistics {
             total_sent: AtomicUsize::new(0),
             received_per_sec: OneSecondMetric::new(),
             sent_per_sec: OneSecondMetric::new(),
+            pending_to_send_buffer_size: AtomicUsize::new(0),
         }
     }
 

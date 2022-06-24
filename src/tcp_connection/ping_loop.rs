@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use my_logger::MyLogger;
-use rust_extensions::date_time::DateTimeAsMicroseconds;
+use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 
 use crate::{tcp_connection::SocketConnection, TcpSocketSerializer};
 
@@ -10,12 +9,15 @@ pub struct PingData {
     pub ping_packet: Vec<u8>,
 }
 
-pub async fn start<TContract, TSerializer: TcpSocketSerializer<TContract>>(
+pub async fn start<
+    TContract: Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+>(
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     ping_data: Option<PingData>,
     disconnect_interval: Duration,
-    logger: Arc<MyLogger>,
-    log_context: String,
+    logger: Arc<dyn Logger + Send + Sync + 'static>,
+    socket_context: Option<String>,
 ) {
     const PROCESS_NAME: &str = "ping_loop";
     let ping_interval = Duration::from_secs(1);
@@ -37,19 +39,7 @@ pub async fn start<TContract, TSerializer: TcpSocketSerializer<TContract>>(
 
                 if *seconds_remains_to_ping == 0 {
                     *seconds_remains_to_ping = ping_data.seconds_to_ping;
-                    if !connection.send_bytes(ping_data.ping_packet.as_ref()).await {
-                        logger.write_log(
-                            my_logger::LogLevel::Info,
-                            PROCESS_NAME.to_string(),
-                            format!(
-                                "Could not send ping command to the socket {}. Disconnecting",
-                                connection.id
-                            ),
-                            Some(log_context),
-                        );
-
-                        break;
-                    }
+                    connection.send_bytes(ping_data.ping_packet.as_ref()).await;
                 }
             }
         }
@@ -60,11 +50,10 @@ pub async fn start<TContract, TSerializer: TcpSocketSerializer<TContract>>(
             now.duration_since(connection.statistics.last_receive_moment.as_date_time());
 
         if last_received > disconnect_interval {
-            logger.write_log(
-                my_logger::LogLevel::Info,
+            logger.write_info(
                 PROCESS_NAME.to_string(),
                 format!("Detected dead socket {}. Disconnecting", connection.id),
-                Some(log_context),
+                socket_context,
             );
 
             connection.disconnect().await;

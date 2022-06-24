@@ -4,12 +4,17 @@ use tokio::sync::Mutex;
 
 use crate::{tcp_connection::SocketConnection, ConnectionId, TcpSocketSerializer};
 
-pub struct ConnectionsList<TContract, TSerializer: TcpSocketSerializer<TContract>> {
+pub struct ConnectionsList<
+    TContract: Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+> {
     connections: Mutex<HashMap<ConnectionId, Arc<SocketConnection<TContract, TSerializer>>>>,
 }
 
-impl<TContract, TSerializer: TcpSocketSerializer<TContract>>
-    ConnectionsList<TContract, TSerializer>
+impl<
+        TContract: Send + Sync + 'static,
+        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    > ConnectionsList<TContract, TSerializer>
 {
     pub fn new() -> Self {
         Self {
