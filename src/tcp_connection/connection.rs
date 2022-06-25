@@ -1,4 +1,3 @@
-use core::slice::SlicePattern;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
