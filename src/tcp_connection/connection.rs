@@ -1,3 +1,4 @@
+use core::slice::SlicePattern;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -92,10 +93,7 @@ impl<
 
         if let Some(socket_data) = write_access.as_mut() {
             let payload = socket_data.get_serializer().serialize(payload);
-            socket_data.tcp_payloads.add_payload(payload.as_slice());
-            self.statistics
-                .pending_to_send_buffer_size
-                .store(socket_data.tcp_payloads.get_size(), Ordering::SeqCst);
+            self.add_payload_to_send(socket_data, payload.as_slice());
         }
     }
 
@@ -103,21 +101,23 @@ impl<
         let mut write_access = self.socket.lock().await;
         if let Some(socket_data) = write_access.as_mut() {
             let payload = socket_data.get_serializer().serialize_ref(payload);
-            socket_data.tcp_payloads.add_payload(payload.as_ref());
-            self.statistics
-                .pending_to_send_buffer_size
-                .store(socket_data.tcp_payloads.get_size(), Ordering::SeqCst);
+            self.add_payload_to_send(socket_data, payload.as_slice());
         }
     }
 
     pub async fn send_bytes(&self, payload: &[u8]) {
         let mut write_access = self.socket.lock().await;
         if let Some(socket_data) = write_access.as_mut() {
-            socket_data.tcp_payloads.add_payload(payload);
-            self.statistics
-                .pending_to_send_buffer_size
-                .store(socket_data.tcp_payloads.get_size(), Ordering::SeqCst);
+            self.add_payload_to_send(socket_data, payload);
         }
+    }
+
+    fn add_payload_to_send(&self, socket_data: &mut SocketData<TSerializer>, payload: &[u8]) {
+        socket_data.tcp_payloads.add_payload(payload);
+        self.send_to_socket_event_loop.send(());
+        self.statistics
+            .pending_to_send_buffer_size
+            .store(socket_data.tcp_payloads.get_size(), Ordering::SeqCst);
     }
 
     pub async fn apply_payload_to_serializer(&self, contract: &TContract) {
