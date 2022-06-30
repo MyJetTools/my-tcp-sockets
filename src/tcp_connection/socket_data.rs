@@ -42,6 +42,9 @@ impl<TSerializer> SocketData<TSerializer> {
             let payload = self.tcp_payloads.get_payload();
 
             if payload.is_none() {
+                statistics
+                    .pending_to_send_buffer_size
+                    .store(self.tcp_payloads.get_size(), Ordering::SeqCst);
                 return Ok(());
             }
 
