@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use rust_extensions::{ApplicationStates, Logger};
-use tokio::net::TcpStream;
+use rust_extensions::Logger;
+use tokio::{net::TcpStream, sync::Mutex};
 
 use tokio::io;
 
@@ -22,6 +22,7 @@ pub struct TcpClient {
     name: String,
     max_send_payload_size: usize,
     send_timeout: Duration,
+    background_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl TcpClient {
@@ -34,14 +35,14 @@ impl TcpClient {
             name,
             max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
             send_timeout: DEFAULT_SEND_TIMEOUT,
+            background_task: Mutex::new(None),
         }
     }
 
-    pub fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
+    pub async fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
         &self,
         serializer_factory: Arc<TSerializeFactory>,
         socket_callback: Arc<TSocketCallback>,
-        app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
         TContract: Send + Sync + 'static,
@@ -49,7 +50,7 @@ impl TcpClient {
         TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
         TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
     {
-        tokio::spawn(connection_loop(
+        let handle = tokio::spawn(connection_loop(
             self.host_port.clone(),
             self.connect_timeout,
             serializer_factory,
@@ -59,9 +60,19 @@ impl TcpClient {
             self.name.clone(),
             self.max_send_payload_size,
             self.send_timeout,
-            app_states,
             logger,
         ));
+
+        let mut background_task = self.background_task.lock().await;
+        background_task.replace(handle);
+    }
+
+    pub async fn stop(&self) {
+        let mut background_task = self.background_task.lock().await;
+
+        if let Some(background_task) = background_task.take() {
+            background_task.abort();
+        }
     }
 }
 
@@ -75,7 +86,6 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
     socket_name: String,
     max_send_payload_size: usize,
     send_timeout: Duration,
-    app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
     TContract: Send + Sync + 'static,
@@ -126,7 +136,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
                 connection
                     .send_to_socket_event_loop
-                    .start(app_states.clone(), logger.clone())
+                    .start(connection.connection_state.clone(), logger.clone())
                     .await;
 
                 let read_serializer = serializer_factory();

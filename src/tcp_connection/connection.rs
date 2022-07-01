@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::{ConnectionId, TcpSocketSerializer};
 
-use super::{ConnectionStatistics, SocketData};
+use super::{ConnectionStatistics, SocketData, TcpConnectionStates};
 
 pub struct SocketConnection<TContract: Send + Sync + 'static, TSerializer>
 where
@@ -27,6 +27,7 @@ where
     pub send_timeout: Duration,
     pub send_to_socket_event_loop: EventsLoop<()>,
     socket_context: Option<String>,
+    pub connection_state: Arc<TcpConnectionStates>,
 }
 
 impl<
@@ -61,6 +62,7 @@ impl<
             send_timeout,
             send_to_socket_event_loop: EventsLoop::new(format!("Connection {}", id)),
             socket_context,
+            connection_state: Arc::new(TcpConnectionStates::new()),
         }
     }
 

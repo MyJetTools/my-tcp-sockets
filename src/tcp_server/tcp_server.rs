@@ -122,7 +122,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
 
                 connection
                     .send_to_socket_event_loop
-                    .start(app_states.clone(), logger.clone())
+                    .start(connection.connection_state.clone(), logger.clone())
                     .await;
 
                 tokio::task::spawn(handle_new_connection(
