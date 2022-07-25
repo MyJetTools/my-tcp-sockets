@@ -22,7 +22,7 @@ where
     pub id: ConnectionId,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
-    logger: Arc<dyn Logger + Send + Sync + 'static>,
+    pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub ping_packet: TContract,
     pub send_timeout: Duration,
     pub send_to_socket_event_loop: EventsLoop<()>,

@@ -62,7 +62,23 @@ where
     loop {
         socket_reader.start_calculating_read_size();
 
-        let contract = read_serializer.deserialize(&mut socket_reader).await?;
+        let read_future = read_serializer.deserialize(&mut socket_reader);
+
+        let read_result =
+            tokio::time::timeout(connection.dead_disconnect_timeout, read_future).await;
+
+        if let Err(_) = &read_result {
+            connection.logger.write_info(
+                "read_loop".to_string(),
+                format!("Read timeout {:?}", connection.dead_disconnect_timeout),
+                Some(format!("ConnectionId: {}", connection.id)),
+            );
+
+            connection.disconnect().await;
+            return Err(ReadingTcpContractFail::SocketDisconnected);
+        }
+
+        let contract = read_result.unwrap()?;
         let state_is_changed = read_serializer.apply_packet(&contract);
 
         if state_is_changed {
