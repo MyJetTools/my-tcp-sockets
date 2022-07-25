@@ -28,6 +28,7 @@ where
     pub send_to_socket_event_loop: EventsLoop<()>,
     socket_context: Option<String>,
     pub connection_state: Arc<TcpConnectionStates>,
+    pub dead_disconnect_timeout: Duration,
 }
 
 impl<
@@ -44,6 +45,7 @@ impl<
         max_send_payload_size: usize,
         send_timeout: Duration,
         socket_context: Option<String>,
+        dead_disconnect_timeout: Duration,
     ) -> Self {
         let ping_packet = serializer.get_ping();
 
@@ -55,14 +57,13 @@ impl<
             addr,
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),
-
             logger,
-
             ping_packet,
             send_timeout,
             send_to_socket_event_loop: EventsLoop::new(format!("Connection {}", id)),
             socket_context,
             connection_state: Arc::new(TcpConnectionStates::new()),
+            dead_disconnect_timeout,
         }
     }
 

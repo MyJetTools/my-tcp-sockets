@@ -15,7 +15,6 @@ pub async fn start<
 >(
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     ping_data: Option<PingData>,
-    disconnect_interval: Duration,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_context: Option<String>,
 ) {
@@ -54,7 +53,7 @@ pub async fn start<
             now.duration_since(connection.statistics.last_receive_moment.as_date_time())
         };
 
-        if last_received > disconnect_interval {
+        if last_received > connection.dead_disconnect_timeout {
             logger.write_info(
                 PROCESS_NAME.to_string(),
                 format!("Detected dead socket {}. Disconnecting", connection.id),

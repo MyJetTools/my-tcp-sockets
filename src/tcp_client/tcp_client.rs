@@ -127,6 +127,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                     max_send_payload_size,
                     send_timeout,
                     socket_context.clone(),
+                    disconnect_timeout,
                 ));
 
                 connection
@@ -152,7 +153,6 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                     read_serializer,
                     socket_callback.clone(),
                     Some(ping_data),
-                    disconnect_timeout,
                     logger.clone(),
                     socket_context.clone(),
                 )

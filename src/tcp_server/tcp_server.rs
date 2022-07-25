@@ -113,6 +113,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     max_send_payload_size,
                     send_timeout,
                     log_context.clone(),
+                    Duration::from_secs(60),
                 ));
 
                 connection
@@ -168,7 +169,6 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
         read_serializer,
         socket_callback,
         None,
-        Duration::from_secs(60),
         logger.clone(),
         socket_context.clone(),
     )

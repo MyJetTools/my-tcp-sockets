@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use rust_extensions::Logger;
 use tokio::{io::ReadHalf, net::TcpStream};
@@ -13,7 +13,6 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     read_serializer: TSerializer,
     socket_callback: Arc<TSocketCallback>,
     ping_data: Option<PingData>,
-    disconnect_timeout: Duration,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_context: Option<String>,
 ) where
@@ -24,7 +23,6 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     let ping_handle = tokio::spawn(crate::tcp_connection::ping_loop::start(
         connection.clone(),
         ping_data,
-        disconnect_timeout,
         logger.clone(),
         socket_context.clone(),
     ));
