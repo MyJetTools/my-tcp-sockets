@@ -46,8 +46,13 @@ pub async fn start<
 
         let now = DateTimeAsMicroseconds::now();
 
-        let last_received =
-            now.duration_since(connection.statistics.last_receive_moment.as_date_time());
+        let last_recieved_moment = connection.statistics.last_receive_moment.as_date_time();
+
+        let last_received = if last_recieved_moment.unix_microseconds > now.unix_microseconds {
+            Duration::from_secs(0)
+        } else {
+            now.duration_since(connection.statistics.last_receive_moment.as_date_time())
+        };
 
         if last_received > disconnect_interval {
             logger.write_info(
