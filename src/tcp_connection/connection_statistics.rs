@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::{
+    sync::atomic::{AtomicI64, AtomicUsize, Ordering},
+    time::Duration,
+};
 
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
 
@@ -68,6 +71,10 @@ impl ConnectionStatistics {
     pub fn update_ping_pong_statistic(&self) {
         let ping_start = self.ping_start.load(Ordering::Relaxed);
 
+        if ping_start == 0 {
+            return;
+        }
+
         let ping_start = DateTimeAsMicroseconds::new(ping_start);
 
         let now = DateTimeAsMicroseconds::now();
@@ -75,5 +82,14 @@ impl ConnectionStatistics {
         let duration = now.duration_since(ping_start);
         self.round_trip_micros
             .store(duration.as_micros() as i64, Ordering::SeqCst);
+    }
+
+    pub fn get_ping_pong_duration(&self) -> Option<Duration> {
+        let round_trip_micros = self.round_trip_micros.load(Ordering::Relaxed);
+        if round_trip_micros == 0 {
+            return None;
+        }
+
+        Some(Duration::from_micros(round_trip_micros as u64))
     }
 }

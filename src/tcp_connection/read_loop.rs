@@ -83,7 +83,7 @@ where
         let contract = read_result.unwrap()?;
 
         if contract.is_pong() {
-            connection.statistics.set_ping_start()
+            connection.statistics.update_ping_pong_statistic();
         }
         let state_is_changed = read_serializer.apply_packet(&contract);
 
