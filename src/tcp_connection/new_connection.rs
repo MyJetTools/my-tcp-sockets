@@ -5,7 +5,7 @@ use tokio::{io::ReadHalf, net::TcpStream};
 
 use crate::{SocketEventCallback, TcpSocketSerializer};
 
-use super::{ping_loop::PingData, SocketConnection};
+use super::{ping_loop::PingData, SocketConnection, TcpContract};
 
 pub async fn start<TContract, TSerializer, TSocketCallback>(
     read_socket: ReadHalf<TcpStream>,
@@ -16,7 +16,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_context: Option<String>,
 ) where
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {

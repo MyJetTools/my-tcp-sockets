@@ -12,6 +12,7 @@ pub use connection::SocketConnection;
 pub use connection_statistics::ConnectionStatistics;
 pub use flush_to_socket_event_loop::FlushToSocketEventLoop;
 pub use one_second_metric::OneSecondMetric;
+pub use ping_loop::TcpContract;
 pub use socket_data::SocketData;
 pub use tcp_connection_states::TcpConnectionStates;
 pub use tcp_payloads::TcpPayloads;

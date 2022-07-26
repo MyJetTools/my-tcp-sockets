@@ -6,6 +6,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 
 use tokio::io;
 
+use crate::tcp_connection::TcpContract;
 use crate::{
     tcp_connection::{ping_loop::PingData, FlushToSocketEventLoop, SocketConnection},
     ConnectionId, SocketEventCallback, TcpSocketSerializer,
@@ -45,7 +46,7 @@ impl TcpClient {
         socket_callback: Arc<TSocketCallback>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
-        TContract: Send + Sync + 'static,
+        TContract: TcpContract + Send + Sync + 'static,
         TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
         TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
         TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
@@ -88,7 +89,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
     send_timeout: Duration,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,

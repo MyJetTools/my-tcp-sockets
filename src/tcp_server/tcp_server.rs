@@ -7,7 +7,7 @@ use tokio::{
 };
 
 use crate::{
-    tcp_connection::{FlushToSocketEventLoop, SocketConnection},
+    tcp_connection::{FlushToSocketEventLoop, SocketConnection, TcpContract},
     ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
 
@@ -17,7 +17,7 @@ const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
 const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct TcpServer<
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
     TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
 > {
     addr: SocketAddr,
@@ -30,7 +30,7 @@ pub struct TcpServer<
 impl<TContract, TSerializer> TcpServer<TContract, TSerializer>
 where
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
 {
     pub fn new(name: String, addr: SocketAddr) -> Self {
         Self {
@@ -77,7 +77,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
     app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSerializeFactory: Fn() -> TSerializer,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
@@ -155,7 +155,7 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     socket_callback: Arc<TSocketCallback>,
     socket_context: Option<String>,
 ) where
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {

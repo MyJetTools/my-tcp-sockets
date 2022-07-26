@@ -9,6 +9,8 @@ use crate::{
     ConnectionEvent, SocketEventCallback, TcpSocketSerializer,
 };
 
+use super::TcpContract;
+
 pub async fn start<TContract, TSerializer, TSocketCallback>(
     read_socket: ReadHalf<TcpStream>,
     connection: Arc<SocketConnection<TContract, TSerializer>>,
@@ -17,7 +19,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_context: Option<String>,
 ) where
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
@@ -54,7 +56,7 @@ async fn read_loop<TContract, TSerializer, TSocketCallback>(
     socket_callback: Arc<TSocketCallback>,
 ) -> Result<(), ReadingTcpContractFail>
 where
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
@@ -79,6 +81,10 @@ where
         }
 
         let contract = read_result.unwrap()?;
+
+        if contract.is_pong() {
+            connection.statistics.set_ping_start()
+        }
         let state_is_changed = read_serializer.apply_packet(&contract);
 
         if state_is_changed {

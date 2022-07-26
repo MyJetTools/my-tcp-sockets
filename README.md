@@ -6,3 +6,7 @@
 ## 0.1.4
 * We can stop Client Socket - it's not connected to Applications states anymore;
 * Fixed bug - if application is not initialized - but we establish client socket - it would not send payloads;
+* We have timeout on read loop;
+
+## 0.1.5
+Now we can mesure the ping/pong roundtrip duration;

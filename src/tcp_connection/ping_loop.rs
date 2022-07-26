@@ -4,13 +4,17 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 
 use crate::{tcp_connection::SocketConnection, TcpSocketSerializer};
 
+pub trait TcpContract {
+    fn is_pong(&self) -> bool;
+}
+
 pub struct PingData {
     pub seconds_to_ping: usize,
     pub ping_packet: Vec<u8>,
 }
 
 pub async fn start<
-    TContract: Send + Sync + 'static,
+    TContract: TcpContract + Send + Sync + 'static,
     TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
 >(
     connection: Arc<SocketConnection<TContract, TSerializer>>,
@@ -38,6 +42,7 @@ pub async fn start<
 
                 if *seconds_remains_to_ping == 0 {
                     *seconds_remains_to_ping = ping_data.seconds_to_ping;
+                    connection.statistics.set_ping_start();
                     connection.send_bytes(ping_data.ping_packet.as_ref()).await;
                 }
             }

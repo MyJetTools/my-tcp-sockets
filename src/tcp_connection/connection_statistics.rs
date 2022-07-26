@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
 
@@ -14,6 +14,8 @@ pub struct ConnectionStatistics {
     pub received_per_sec: OneSecondMetric,
     pub sent_per_sec: OneSecondMetric,
     pub pending_to_send_buffer_size: AtomicUsize,
+    pub ping_start: AtomicI64,
+    pub round_trip_micros: AtomicI64,
 }
 
 impl ConnectionStatistics {
@@ -29,6 +31,8 @@ impl ConnectionStatistics {
             received_per_sec: OneSecondMetric::new(),
             sent_per_sec: OneSecondMetric::new(),
             pending_to_send_buffer_size: AtomicUsize::new(0),
+            ping_start: AtomicI64::new(0),
+            round_trip_micros: AtomicI64::new(0),
         }
     }
 
@@ -53,5 +57,23 @@ impl ConnectionStatistics {
 
     pub fn disconnect(&self) {
         self.disconnected.update(DateTimeAsMicroseconds::now());
+    }
+
+    pub fn set_ping_start(&self) {
+        let now = DateTimeAsMicroseconds::now();
+        self.ping_start
+            .store(now.unix_microseconds, Ordering::SeqCst);
+    }
+
+    pub fn update_ping_pong_statistic(&self) {
+        let ping_start = self.ping_start.load(Ordering::Relaxed);
+
+        let ping_start = DateTimeAsMicroseconds::new(ping_start);
+
+        let now = DateTimeAsMicroseconds::now();
+
+        let duration = now.duration_since(ping_start);
+        self.round_trip_micros
+            .store(duration.as_micros() as i64, Ordering::SeqCst);
     }
 }
