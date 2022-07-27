@@ -2,22 +2,18 @@ use super::{ReadBuffer, ReadingTcpContractFail, SocketReader};
 
 use async_trait::async_trait;
 
-pub struct SocketReaderMock {
+pub struct SocketReaderInMem {
     data: Vec<u8>,
 }
 
-impl SocketReaderMock {
-    pub fn new() -> Self {
-        Self { data: Vec::new() }
-    }
-
-    pub fn push(&mut self, data: &[u8]) {
-        self.data.extend(data);
+impl SocketReaderInMem {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self { data }
     }
 }
 
 #[async_trait]
-impl SocketReader for SocketReaderMock {
+impl SocketReader for SocketReaderInMem {
     async fn read_byte(&mut self) -> Result<u8, ReadingTcpContractFail> {
         let result = self.data.remove(0);
         Ok(result)
