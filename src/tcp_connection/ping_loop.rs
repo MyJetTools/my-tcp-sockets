@@ -52,11 +52,9 @@ pub async fn start<
 
         let last_recieved_moment = connection.statistics.last_receive_moment.as_date_time();
 
-        let last_received = if last_recieved_moment.unix_microseconds > now.unix_microseconds {
-            Duration::from_secs(0)
-        } else {
-            now.duration_since(connection.statistics.last_receive_moment.as_date_time())
-        };
+        let last_received = now
+            .duration_since(last_recieved_moment)
+            .as_positive_or_zero();
 
         if last_received > connection.dead_disconnect_timeout {
             logger.write_info(

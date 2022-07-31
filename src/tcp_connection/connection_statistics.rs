@@ -79,7 +79,7 @@ impl ConnectionStatistics {
 
         let now = DateTimeAsMicroseconds::now();
 
-        let duration = now.duration_since(ping_start);
+        let duration = now.duration_since(ping_start).as_positive_or_zero();
         self.round_trip_micros
             .store(duration.as_micros() as i64, Ordering::SeqCst);
     }
