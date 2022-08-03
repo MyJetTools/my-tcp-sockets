@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 use tokio::{io::ReadHalf, net::TcpStream};
@@ -17,7 +17,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     read_serializer: TSerializer,
     socket_callback: Arc<TSocketCallback>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
-    socket_context: Option<String>,
+    socket_context: Option<HashMap<String, String>>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -32,6 +32,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
         connection.clone(),
         read_serializer,
         socket_callback.clone(),
+        socket_context.clone(),
     ))
     .await;
 
@@ -54,6 +55,7 @@ async fn read_loop<TContract, TSerializer, TSocketCallback>(
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     mut read_serializer: TSerializer,
     socket_callback: Arc<TSocketCallback>,
+    socket_context: Option<HashMap<String, String>>,
 ) -> Result<(), ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
@@ -73,7 +75,7 @@ where
             connection.logger.write_info(
                 "read_loop".to_string(),
                 format!("Read timeout {:?}", connection.dead_disconnect_timeout),
-                Some(format!("ConnectionId: {}", connection.id)),
+                socket_context,
             );
 
             connection.disconnect().await;

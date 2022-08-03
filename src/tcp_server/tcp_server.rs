@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use rust_extensions::{ApplicationStates, Logger};
 use tokio::{
@@ -89,6 +89,12 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
     let listener = TcpListener::bind(addr).await.unwrap();
     let mut connection_id: ConnectionId = 0;
 
+    let mut server_socket_log_context = HashMap::new();
+    server_socket_log_context.insert("ServerSocketName".to_string(), context_name.to_string());
+    server_socket_log_context.insert("Addr".to_string(), format!("{}", addr));
+
+    let server_socket_log_context = Some(server_socket_log_context);
+
     loop {
         match listener.accept().await {
             Ok((tcp_stream, socket_addr)) => {
@@ -99,10 +105,9 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     break;
                 }
 
-                let log_context = Some(format!(
-                    "ServerConnection:{}. Id:{}",
-                    context_name, connection_id
-                ));
+                let mut log_context = HashMap::new();
+                log_context.insert("Id".to_string(), connection_id.to_string());
+                log_context.insert("ServerSocketName".to_string(), context_name.to_string());
 
                 let connection = Arc::new(SocketConnection::new(
                     write_socket,
@@ -112,7 +117,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     logger.clone(),
                     max_send_payload_size,
                     send_timeout,
-                    log_context.clone(),
+                    log_context,
                     Duration::from_secs(60),
                 ));
 
@@ -133,14 +138,13 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     serializer_factory(),
                     logger.clone(),
                     socket_callback.clone(),
-                    log_context.clone(),
                 ));
                 connection_id += 1;
             }
             Err(err) => logger.write_error(
                 "Tcp Accept Socket".to_string(),
                 format!("Can not accept socket. Err:{}", err),
-                format!("ServerConnection: {}.", context_name).into(),
+                server_socket_log_context.clone(),
             ),
         }
     }
@@ -153,7 +157,6 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     read_serializer: TSerializer,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
-    socket_context: Option<String>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -170,7 +173,6 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
         socket_callback,
         None,
         logger.clone(),
-        socket_context.clone(),
     )
     .await;
     connections.remove(id).await;

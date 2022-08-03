@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -96,7 +97,11 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 {
     let mut connection_id: ConnectionId = 0;
 
-    let socket_context = Some(format!("{}", socket_name));
+    let mut accept_socket_context = HashMap::new();
+    accept_socket_context.insert("SocketName".to_string(), socket_name.clone());
+    accept_socket_context.insert("HostPort".to_string(), host_port.clone());
+
+    let accept_socket_context = Some(accept_socket_context);
 
     const LOG_PROCESS: &str = "Tcp Client Connect";
     loop {
@@ -105,7 +110,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
         logger.write_info(
             LOG_PROCESS.to_string(),
             format!("Trying to connect to {}", host_port),
-            socket_context.clone(),
+            accept_socket_context.clone(),
         );
         let connect_result = TcpStream::connect(host_port.as_str()).await;
 
@@ -114,10 +119,14 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                 logger.write_info(
                     LOG_PROCESS.to_string(),
                     format!("Connected to {}. Id: {}", host_port, connection_id),
-                    socket_context.clone(),
+                    accept_socket_context.clone(),
                 );
 
                 let (read_socket, write_socket) = io::split(tcp_stream);
+
+                let mut log_context = HashMap::new();
+                log_context.insert("ConnectionId".to_string(), connection_id.to_string());
+                log_context.insert("SocketName".to_string(), socket_name.to_string());
 
                 let connection = Arc::new(SocketConnection::new(
                     write_socket,
@@ -127,7 +136,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                     logger.clone(),
                     max_send_payload_size,
                     send_timeout,
-                    socket_context.clone(),
+                    log_context,
                     disconnect_timeout,
                 ));
 
@@ -155,14 +164,13 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                     socket_callback.clone(),
                     Some(ping_data),
                     logger.clone(),
-                    socket_context.clone(),
                 )
                 .await;
 
                 logger.write_info(
                     LOG_PROCESS.to_string(),
                     format!("Disconnected from {}", host_port),
-                    socket_context.clone(),
+                    accept_socket_context.clone(),
                 );
                 connection_id += 1;
             }
@@ -170,7 +178,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                 logger.write_error(
                     LOG_PROCESS.to_string(),
                     format!("Can not connect to {}. Reason: {}", host_port, err),
-                    socket_context.clone(),
+                    accept_socket_context.clone(),
                 );
             }
         }

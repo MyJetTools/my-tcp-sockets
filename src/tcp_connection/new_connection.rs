@@ -14,7 +14,6 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     socket_callback: Arc<TSocketCallback>,
     ping_data: Option<PingData>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
-    socket_context: Option<String>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -24,7 +23,6 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
         connection.clone(),
         ping_data,
         logger.clone(),
-        socket_context.clone(),
     ));
 
     let connection_id = connection.id;
@@ -35,7 +33,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
         read_serializer,
         socket_callback.clone(),
         logger.clone(),
-        socket_context.clone(),
+        connection.get_log_context().await,
     )
     .await;
 
@@ -46,7 +44,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
                 "Socket ping {} loop exit with error: {}",
                 connection_id, err
             ),
-            socket_context.clone(),
+            connection.get_log_context().await,
         );
     };
 }

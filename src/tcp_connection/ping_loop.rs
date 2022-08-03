@@ -20,7 +20,6 @@ pub async fn start<
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     ping_data: Option<PingData>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
-    socket_context: Option<String>,
 ) {
     const PROCESS_NAME: &str = "ping_loop";
     let ping_interval = Duration::from_secs(1);
@@ -60,7 +59,7 @@ pub async fn start<
             logger.write_info(
                 PROCESS_NAME.to_string(),
                 format!("Detected dead socket {}. Disconnecting", connection.id),
-                socket_context,
+                connection.get_log_context().await,
             );
 
             connection.disconnect().await;
