@@ -146,6 +146,14 @@ impl<
         }
     }
 
+    pub async fn set_connection_name(&self, name: &str) {
+        let mut write_access = self.single_threaded.lock().await;
+        write_access
+            .log_context
+            .as_mut()
+            .unwrap()
+            .insert("ConnectionName".to_string(), name.to_string());
+    }
     pub async fn flush_to_socket(&self) {
         let mut write_access = self.single_threaded.lock().await;
 
