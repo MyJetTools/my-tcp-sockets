@@ -81,6 +81,8 @@ where
             connection.disconnect().await;
             return Err(ReadingTcpContractFail::SocketDisconnected);
         }
+        #[cfg(feature = "debug_incoming_traffic")]
+        println!("Got incoming package. Len:{}", socket_reader.read_size);
 
         let contract = read_result.unwrap()?;
 
