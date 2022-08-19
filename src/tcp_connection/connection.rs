@@ -131,6 +131,11 @@ impl<
     }
 
     fn add_payload_to_send(&self, socket_data: &mut SocketData<TSerializer>, payload: &[u8]) {
+        #[cfg(feature = "debug_outcoming_traffic")]
+        {
+            println!("Send {} bytes to tcp socket: ", payload.len());
+        }
+
         socket_data.tcp_payloads.add_payload(payload);
         self.send_to_socket_event_loop.send(());
         self.statistics
