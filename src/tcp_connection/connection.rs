@@ -98,6 +98,7 @@ impl<
         process_disconnect(&mut write_access, self.id, &self.logger).await;
 
         self.statistics.disconnect();
+
         return true;
     }
 
@@ -115,6 +116,7 @@ impl<
         }
     }
 
+    #[cfg(feature = "serialize_as_ref")]
     pub async fn send_ref(&self, payload: &TContract) {
         let mut write_access = self.single_threaded.lock().await;
         if let Some(socket_data) = write_access.connection.as_mut() {
@@ -131,7 +133,6 @@ impl<
     }
 
     fn add_payload_to_send(&self, socket_data: &mut SocketData<TSerializer>, payload: &[u8]) {
-        #[cfg(feature = "debug_outcoming_traffic")]
         {
             println!(
                 "Send {} bytes to tcp socket. First byte:[{}]",
@@ -142,11 +143,13 @@ impl<
 
         socket_data.tcp_payloads.add_payload(payload);
         self.send_to_socket_event_loop.send(());
+
         self.statistics
             .pending_to_send_buffer_size
             .store(socket_data.tcp_payloads.get_size(), Ordering::SeqCst);
     }
 
+    #[cfg(feature = "statefull_serializer")]
     pub async fn apply_payload_to_serializer(&self, contract: &TContract) {
         let mut write_access = self.single_threaded.lock().await;
 

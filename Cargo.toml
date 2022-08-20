@@ -8,6 +8,9 @@ edition = "2021"
 default = []
 debug_incoming_traffic = []
 debug_outcoming_traffic = []
+statefull_serializer = []
+serialize_as_ref = []
+
 
 [dependencies]
 rust-extensions = { branch = "0.1.1", git = "https://github.com/MyJetTools/rust-extensions.git" }

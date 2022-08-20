@@ -89,8 +89,10 @@ where
         if contract.is_pong() {
             connection.statistics.update_ping_pong_statistic();
         }
+        #[cfg(feature = "statefull_serializer")]
         let state_is_changed = read_serializer.apply_packet(&contract);
 
+        #[cfg(feature = "statefull_serializer")]
         if state_is_changed {
             connection.apply_payload_to_serializer(&contract).await;
         }

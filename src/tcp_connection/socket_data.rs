@@ -1,11 +1,15 @@
-use std::{sync::atomic::Ordering, time::Duration};
+use std::time::Duration;
+
+use std::sync::atomic::Ordering;
 
 use tokio::{
     io::{AsyncWriteExt, WriteHalf},
     net::TcpStream,
 };
 
-use super::{ConnectionStatistics, TcpPayloads};
+use super::TcpPayloads;
+
+use super::ConnectionStatistics;
 
 pub struct SocketData<TSerializer> {
     pub tcp_stream: WriteHalf<TcpStream>,
@@ -53,6 +57,7 @@ impl<TSerializer> SocketData<TSerializer> {
             self.send_bytes(payload.as_slice(), send_time_out).await?;
 
             statistics.update_sent_amount(payload.len());
+
             statistics
                 .pending_to_send_buffer_size
                 .store(self.tcp_payloads.get_size(), Ordering::SeqCst);
