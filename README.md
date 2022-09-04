@@ -10,3 +10,6 @@
 
 ## 0.1.5
 Now we can mesure the ping/pong roundtrip duration;
+
+## 0.1.6
+Using Tags System
