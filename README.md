@@ -15,4 +15,4 @@ Now we can mesure the ping/pong roundtrip duration;
 Using Tags System
 
 ## 0.1.7
-* Client connection settings is read each connection;
+* Client connection settings are read each connection;
