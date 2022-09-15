@@ -9,6 +9,7 @@ pub trait TcpSocketSerializer<TContract: Send + Sync + 'static> {
     fn serialize_ref(&self, contract: &TContract) -> Vec<u8>;
 
     fn get_ping(&self) -> TContract;
+
     async fn deserialize<TSocketReader: Send + Sync + 'static + SocketReader>(
         &mut self,
         socket_reader: &mut TSocketReader,
