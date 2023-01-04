@@ -109,9 +109,18 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                 log_context.insert("Id".to_string(), connection_id.to_string());
                 log_context.insert("ServerSocketName".to_string(), context_name.to_string());
 
+                let serializer = serializer_factory();
+
+                let cached_ping_payload = if TSerializer::PING_PACKET_IS_SINGLETONE {
+                    let ping_payload = serializer.get_ping();
+                    Some(serializer.serialize(ping_payload))
+                } else {
+                    None
+                };
+
                 let connection = Arc::new(SocketConnection::new(
                     write_socket,
-                    serializer_factory(),
+                    serializer,
                     connection_id,
                     Some(socket_addr),
                     logger.clone(),
@@ -119,6 +128,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     send_timeout,
                     log_context,
                     Duration::from_secs(60),
+                    cached_ping_payload,
                 ));
 
                 connection

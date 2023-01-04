@@ -44,6 +44,7 @@ where
     pub send_to_socket_event_loop: EventsLoop<()>,
     pub connection_state: Arc<TcpConnectionStates>,
     pub dead_disconnect_timeout: Duration,
+    cached_ping_payload: Option<Vec<u8>>,
 }
 
 impl<
@@ -61,6 +62,7 @@ impl<
         send_timeout: Duration,
         log_context: HashMap<String, String>,
         dead_disconnect_timeout: Duration,
+        cached_ping_payload: Option<Vec<u8>>,
     ) -> Self {
         let ping_packet = serializer.get_ping();
 
@@ -81,6 +83,7 @@ impl<
 
             connection_state: Arc::new(TcpConnectionStates::new()),
             dead_disconnect_timeout,
+            cached_ping_payload,
         }
     }
 
@@ -187,7 +190,13 @@ impl<
     }
     pub async fn send_ping(&self) {
         let mut single_threaded = self.single_threaded.lock().await;
+
         if let Some(socket_data) = &mut single_threaded.connection {
+            if let Some(ping_payload) = &self.cached_ping_payload {
+                self.add_payload_to_send(socket_data, ping_payload);
+                return;
+            }
+
             let ping_contract = socket_data.get_serializer().get_ping();
             let payload = socket_data.get_serializer().serialize(ping_contract);
             self.add_payload_to_send(socket_data, payload.as_slice());
