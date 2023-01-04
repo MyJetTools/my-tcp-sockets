@@ -185,6 +185,14 @@ impl<
             }
         }
     }
+    pub async fn send_ping(&self) {
+        let mut single_threaded = self.single_threaded.lock().await;
+        if let Some(socket_data) = &mut single_threaded.connection {
+            let ping_contract = socket_data.get_serializer().get_ping();
+            let payload = socket_data.get_serializer().serialize(ping_contract);
+            self.add_payload_to_send(socket_data, payload.as_slice());
+        }
+    }
 }
 
 async fn process_disconnect<TSerializer>(

@@ -10,7 +10,7 @@ use tokio::io;
 use crate::tcp_connection::TcpContract;
 use crate::TcpClientSocketSettings;
 use crate::{
-    tcp_connection::{ping_loop::PingData, FlushToSocketEventLoop, SocketConnection},
+    tcp_connection::{FlushToSocketEventLoop, SocketConnection},
     ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
 
@@ -158,17 +158,12 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
                 let read_serializer = serializer_factory();
 
-                let ping_data = PingData {
-                    seconds_to_ping,
-                    ping_packet: read_serializer.serialize(read_serializer.get_ping()),
-                };
-
                 crate::tcp_connection::new_connection::start(
                     read_socket,
                     connection.clone(),
                     read_serializer,
                     socket_callback.clone(),
-                    Some(ping_data),
+                    Some(seconds_to_ping),
                     logger.clone(),
                 )
                 .await;

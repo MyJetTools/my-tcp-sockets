@@ -8,27 +8,18 @@ pub trait TcpContract {
     fn is_pong(&self) -> bool;
 }
 
-pub struct PingData {
-    pub seconds_to_ping: usize,
-    pub ping_packet: Vec<u8>,
-}
-
 pub async fn start<
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
 >(
     connection: Arc<SocketConnection<TContract, TSerializer>>,
-    ping_data: Option<PingData>,
+    seconds_to_ping: Option<usize>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) {
     const PROCESS_NAME: &str = "ping_loop";
     let ping_interval = Duration::from_secs(1);
 
-    let mut seconds_remains_to_ping = if let Some(ping_data) = &ping_data {
-        Some(ping_data.seconds_to_ping)
-    } else {
-        None
-    };
+    let mut seconds_remains_to_ping = seconds_to_ping.clone();
 
     while connection.is_connected() {
         tokio::time::sleep(ping_interval).await;
@@ -36,13 +27,13 @@ pub async fn start<
         connection.statistics.one_second_tick();
 
         if let Some(seconds_remains_to_ping) = &mut seconds_remains_to_ping {
-            if let Some(ping_data) = &ping_data {
+            if let Some(seconds_to_ping) = &seconds_to_ping {
                 *seconds_remains_to_ping -= 1;
 
                 if *seconds_remains_to_ping == 0 {
-                    *seconds_remains_to_ping = ping_data.seconds_to_ping;
+                    *seconds_remains_to_ping = *seconds_to_ping;
                     connection.statistics.set_ping_start();
-                    connection.send_bytes(ping_data.ping_packet.as_ref()).await;
+                    connection.send_ping().await;
                 }
             }
         }
