@@ -19,7 +19,7 @@ const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct TcpClient {
     settings: Arc<dyn TcpClientSocketSettings + Send + Sync + 'static>,
-    connect_timeout: Duration,
+    re_connect_timeout: Duration,
     seconds_to_ping: usize,
     disconnect_timeout: Duration,
     name: String,
@@ -35,7 +35,7 @@ impl TcpClient {
     ) -> Self {
         Self {
             settings,
-            connect_timeout: Duration::from_secs(3),
+            re_connect_timeout: Duration::from_secs(3),
             seconds_to_ping: 3,
             disconnect_timeout: Duration::from_secs(9),
             name,
@@ -43,6 +43,21 @@ impl TcpClient {
             send_timeout: DEFAULT_SEND_TIMEOUT,
             background_task: Mutex::new(None),
         }
+    }
+
+    pub fn set_seconds_to_ping(mut self, seconds_to_ping: usize) -> Self {
+        self.seconds_to_ping = seconds_to_ping;
+        self
+    }
+
+    pub fn set_disconnect_timeout(mut self, disconnect_timeout: Duration) -> Self {
+        self.disconnect_timeout = disconnect_timeout;
+        self
+    }
+
+    pub fn set_reconnect_timeout(mut self, re_connect_timeout: Duration) -> Self {
+        self.re_connect_timeout = re_connect_timeout;
+        self
     }
 
     pub async fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
@@ -58,7 +73,7 @@ impl TcpClient {
     {
         let handle = tokio::spawn(connection_loop(
             self.settings.clone(),
-            self.connect_timeout,
+            self.re_connect_timeout,
             serializer_factory,
             socket_callback,
             self.seconds_to_ping,
@@ -84,7 +99,7 @@ impl TcpClient {
 
 async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
     settings: Arc<dyn TcpClientSocketSettings + Send + Sync + 'static>,
-    connect_timeout: Duration,
+    re_connect_timeout: Duration,
     serializer_factory: Arc<TSerializeFactory>,
     socket_callback: Arc<TSocketCallback>,
     seconds_to_ping: usize,
@@ -106,7 +121,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
     const LOG_PROCESS: &str = "Tcp Client Connect";
     loop {
-        tokio::time::sleep(connect_timeout).await;
+        tokio::time::sleep(re_connect_timeout).await;
 
         let host_port = settings.get_host_port().await;
 
