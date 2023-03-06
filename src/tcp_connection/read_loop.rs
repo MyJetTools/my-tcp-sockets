@@ -63,7 +63,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
         }
     }
 
-    connection.send_to_socket_event_loop.stop();
+    connection.disconnect().await;
 
     let connection_id = connection.id;
 

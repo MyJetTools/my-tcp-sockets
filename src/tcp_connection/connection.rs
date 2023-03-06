@@ -98,9 +98,14 @@ impl<
             return false;
         }
 
+        self.connected
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+
         process_disconnect(&mut write_access, self.id, &self.logger).await;
 
         self.statistics.disconnect();
+
+        self.send_to_socket_event_loop.stop();
 
         return true;
     }
