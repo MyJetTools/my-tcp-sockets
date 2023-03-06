@@ -185,5 +185,6 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
         logger.clone(),
     )
     .await;
+
     connections.remove(id).await;
 }

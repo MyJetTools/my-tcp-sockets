@@ -23,31 +23,67 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
-    socket_callback
-        .handle(ConnectionEvent::Connected(connection.clone()))
-        .await;
-
-    let read_result = tokio::spawn(read_loop(
-        read_socket,
-        connection.clone(),
-        read_serializer,
-        socket_callback.clone(),
-        socket_context.clone(),
-    ))
+    let socket_callback_spawned = socket_callback.clone();
+    let connection_spawned = connection.clone();
+    let result = tokio::spawn(async move {
+        socket_callback_spawned
+            .handle(ConnectionEvent::Connected(connection_spawned.clone()))
+            .await;
+    })
     .await;
 
-    if let Err(err) = read_result {
-        logger.write_error(
-            "Socket Read Loop".to_string(),
-            format!("Socket {} loop exit with error: {}", connection.id, err),
-            socket_context.clone(),
-        );
+    match result {
+        Ok(_) => {
+            let read_result = tokio::spawn(read_loop(
+                read_socket,
+                connection.clone(),
+                read_serializer,
+                socket_callback.clone(),
+                socket_context.clone(),
+            ))
+            .await;
+
+            if let Err(err) = read_result {
+                logger.write_error(
+                    "Socket Read Loop".to_string(),
+                    format!("Socket {} loop exit with error: {}", connection.id, err),
+                    socket_context.clone(),
+                );
+            }
+        }
+        Err(err) => {
+            logger.write_fatal_error(
+                "Socket Read Loop".to_string(),
+                format!(
+                    "Socket {} connect callback had a panic: {}",
+                    connection.id, err
+                ),
+                socket_context.clone(),
+            );
+        }
     }
 
     connection.send_to_socket_event_loop.stop();
-    socket_callback
-        .handle(ConnectionEvent::Disconnected(connection.clone()))
-        .await;
+
+    let connection_id = connection.id;
+
+    let result = tokio::spawn(async move {
+        socket_callback
+            .handle(ConnectionEvent::Disconnected(connection.clone()))
+            .await;
+    })
+    .await;
+
+    if let Err(err) = result {
+        logger.write_fatal_error(
+            "Socket Read Loop".to_string(),
+            format!(
+                "Socket {} connect callback had a panic: {}",
+                connection_id, err
+            ),
+            socket_context.clone(),
+        );
+    }
 }
 
 async fn read_loop<TContract, TSerializer, TSocketCallback>(
