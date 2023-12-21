@@ -125,6 +125,12 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
         let host_port = settings.get_host_port().await;
 
+        if host_port.is_none() {
+            continue;
+        }
+
+        let host_port = host_port.unwrap();
+
         let mut socket_context = socket_context.clone();
         socket_context.insert("HostPort".to_string(), host_port.clone());
 
