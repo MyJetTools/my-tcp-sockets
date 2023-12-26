@@ -46,6 +46,18 @@ impl TcpPayloads {
         }
     }
 
+    pub fn shrink_capacity(&mut self) {
+        let capacity = self.payloads.capacity();
+
+        if capacity < 512 {
+            return;
+        }
+
+        if self.payloads.len() > capacity / 2 {
+            return;
+        }
+    }
+
     pub fn get_payload(&mut self) -> Option<Vec<u8>> {
         if self.payloads.len() == 0 {
             return None;

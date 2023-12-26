@@ -49,7 +49,7 @@ impl<TSerializer> SocketData<TSerializer> {
                 statistics
                     .pending_to_send_buffer_size
                     .store(self.tcp_payloads.get_size(), Ordering::SeqCst);
-                return Ok(());
+                break;
             }
 
             let payload = payload.unwrap();
@@ -62,6 +62,10 @@ impl<TSerializer> SocketData<TSerializer> {
                 .pending_to_send_buffer_size
                 .store(self.tcp_payloads.get_size(), Ordering::SeqCst);
         }
+
+        self.tcp_payloads.shrink_capacity();
+
+        Ok(())
     }
 
     async fn send_bytes(&mut self, payload: &[u8], send_time_out: Duration) -> Result<(), String> {

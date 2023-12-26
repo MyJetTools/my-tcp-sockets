@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use tokio::sync::Mutex;
 
@@ -8,7 +8,7 @@ pub struct ConnectionsList<
     TContract: Send + Sync + 'static,
     TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
 > {
-    connections: Mutex<HashMap<ConnectionId, Arc<SocketConnection<TContract, TSerializer>>>>,
+    connections: Mutex<BTreeMap<ConnectionId, Arc<SocketConnection<TContract, TSerializer>>>>,
 }
 
 impl<
@@ -18,7 +18,7 @@ impl<
 {
     pub fn new() -> Self {
         Self {
-            connections: Mutex::new(HashMap::new()),
+            connections: Mutex::new(BTreeMap::new()),
         }
     }
 
