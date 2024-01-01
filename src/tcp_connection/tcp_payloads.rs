@@ -49,13 +49,11 @@ impl TcpPayloads {
     pub fn shrink_capacity(&mut self) {
         let capacity = self.payloads.capacity();
 
-        if capacity < 512 {
+        if capacity < 32 {
             return;
         }
 
-        if self.payloads.len() > capacity / 2 {
-            return;
-        }
+        self.payloads.shrink_to_fit();
     }
 
     pub fn get_payload(&mut self) -> Option<Vec<u8>> {
@@ -112,7 +110,7 @@ mod test {
     }
 
     #[test]
-    fn test_ammount_bugger_than_buffer() {
+    fn test_amount_bugger_than_buffer() {
         let mut tcp_payloads = TcpPayloads::new(10);
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -128,7 +126,7 @@ mod test {
     }
 
     #[test]
-    fn test_ammount_bugger_than_buffer_and_append_second_time_not_full_amount() {
+    fn test_amount_bugger_than_buffer_and_append_second_time_not_full_amount() {
         let mut tcp_payloads = TcpPayloads::new(10);
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -148,7 +146,7 @@ mod test {
     }
 
     #[test]
-    fn test_ammount_bugger_than_buffer_and_append_second_time_full_amount() {
+    fn test_amount_bugger_than_buffer_and_append_second_time_full_amount() {
         let mut tcp_payloads = TcpPayloads::new(10);
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -168,7 +166,7 @@ mod test {
     }
 
     #[test]
-    fn test_ammount_bugger_than_buffer_and_append_second_time_more_than_full_amount() {
+    fn test_amount_bugger_than_buffer_and_append_second_time_more_than_full_amount() {
         let mut tcp_payloads = TcpPayloads::new(10);
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
