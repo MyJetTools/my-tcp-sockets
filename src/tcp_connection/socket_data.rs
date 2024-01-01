@@ -72,7 +72,7 @@ impl<TSerializer> SocketData<TSerializer> {
         let result = tokio::time::timeout(send_time_out, self.tcp_stream.write_all(payload));
 
         match result.await {
-            Ok(not_timeouted_result) => match not_timeouted_result {
+            Ok(not_time_outed_result) => match not_time_outed_result {
                 Ok(_) => {
                     return Ok(());
                 }
