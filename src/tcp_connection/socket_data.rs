@@ -56,7 +56,8 @@ impl<TSerializer> SocketData<TSerializer> {
 
             let mut payload = payload.unwrap();
 
-            while let Some(to_send) = payload.get_slice_to_send(self.max_send_payload_size_to_send)
+            while let Some(to_send) =
+                payload.get_next_slice_to_send(self.max_send_payload_size_to_send)
             {
                 self.send_bytes(to_send, send_time_out).await?;
             }

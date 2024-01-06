@@ -1,7 +1,8 @@
 pub struct TcpBufferChunk {
-    pub data: Vec<u8>,
+    pub reusable_data_is_sent: bool,
+    pub reusable_buffer: Vec<u8>,
     pub pos_to_send: usize,
-
+    pub additional_buffer: Vec<u8>,
     #[cfg(test)]
     pub created: rust_extensions::date_time::DateTimeAsMicroseconds,
 }
@@ -9,66 +10,81 @@ pub struct TcpBufferChunk {
 impl TcpBufferChunk {
     pub fn new(max_size: usize) -> Self {
         Self {
-            data: Vec::with_capacity(max_size),
+            reusable_buffer: Vec::with_capacity(max_size),
+            reusable_data_is_sent: false,
             pos_to_send: 0,
+            additional_buffer: Vec::new(),
             #[cfg(test)]
             created: rust_extensions::date_time::DateTimeAsMicroseconds::now(),
         }
     }
 
-    pub fn append<'s>(&mut self, new_data: &'s [u8]) -> Option<&'s [u8]> {
-        let size_after = self.data.len() + new_data.len();
-        if size_after <= self.data.capacity() {
-            self.data.extend_from_slice(new_data);
-            return None;
+    pub fn append<'s>(&mut self, new_data: &'s [u8]) {
+        let reusable_buffer_capacity = self.reusable_buffer.capacity();
+        if self.reusable_buffer.len() == reusable_buffer_capacity {
+            self.additional_buffer.extend_from_slice(new_data);
+            return;
         }
 
-        let size_to_upload = self.data.capacity() - self.data.len();
+        let size_after = self.reusable_buffer.len() + new_data.len();
+        if size_after <= reusable_buffer_capacity {
+            self.reusable_buffer.extend_from_slice(new_data);
+            return;
+        }
 
-        self.data.extend_from_slice(&new_data[..size_to_upload]);
+        let size_to_upload = self.reusable_buffer.capacity() - self.reusable_buffer.len();
 
-        Some(&new_data[size_to_upload..])
-    }
+        self.reusable_buffer
+            .extend_from_slice(&new_data[..size_to_upload]);
 
-    #[cfg(test)]
-    pub fn as_slice(&self) -> &[u8] {
-        self.data.as_slice()
+        self.additional_buffer
+            .extend_from_slice(&new_data[size_to_upload..]);
     }
 
     pub fn has_buffer_to_fill(&self) -> bool {
-        self.data.len() < self.data.capacity()
+        self.reusable_buffer.len() < self.reusable_buffer.capacity()
     }
 
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.reusable_buffer.len() + self.additional_buffer.len()
     }
 
     pub fn capacity(&self) -> usize {
-        self.data.capacity()
+        self.reusable_buffer.capacity()
     }
 
     pub fn reset(&mut self) {
         self.pos_to_send = 0;
-        self.data.clear();
+        self.reusable_buffer.clear();
+        self.reusable_data_is_sent = false;
+        self.additional_buffer.clear();
+        self.additional_buffer.shrink_to_fit();
     }
 
-    pub fn get_slice_to_send(&mut self, max_buffer_size: usize) -> Option<&[u8]> {
-        if self.pos_to_send >= self.len() {
+    pub fn get_next_slice_to_send(&mut self, max_buffer_size: usize) -> Option<&[u8]> {
+        if !self.reusable_data_is_sent {
+            self.reusable_data_is_sent = true;
+            return Some(self.reusable_buffer.as_slice());
+        }
+
+        if self.pos_to_send >= self.additional_buffer.len() {
             return None;
         }
 
-        let available_to_send = self.len() - self.pos_to_send;
-        let to_send = if available_to_send < max_buffer_size {
-            available_to_send
-        } else {
+        let remain_to_send = self.additional_buffer.len() - self.pos_to_send;
+
+        let size_to_send = if remain_to_send > max_buffer_size {
             max_buffer_size
+        } else {
+            remain_to_send
         };
 
-        let result = &self.data[self.pos_to_send..self.pos_to_send + to_send];
+        let slice_to_send =
+            &self.additional_buffer[self.pos_to_send..self.pos_to_send + size_to_send];
 
-        self.pos_to_send += to_send;
+        self.pos_to_send += size_to_send;
 
-        Some(result)
+        Some(slice_to_send)
     }
 }
 
@@ -81,10 +97,10 @@ mod tests {
 
         let data_to_add = vec![0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8];
 
-        let remaining = chunk.append(&data_to_add);
+        chunk.append(&data_to_add);
 
-        assert_eq!(chunk.as_slice(), &[0u8, 1u8, 2u8, 3u8, 4u8]);
+        assert_eq!(chunk.reusable_buffer.as_slice(), &[0u8, 1u8, 2u8, 3u8, 4u8]);
 
-        assert_eq!(remaining.unwrap(), &[5u8, 6u8, 7u8, 8u8, 9u8]);
+        assert_eq!(chunk.additional_buffer, &[5u8, 6u8, 7u8, 8u8, 9u8]);
     }
 }

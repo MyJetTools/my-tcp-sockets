@@ -15,42 +15,19 @@ impl TcpBufferToSend {
         }
     }
 
-    fn get_payload_to_append(&mut self, payload_size: usize) -> &mut TcpBufferChunk {
-        let len = self.payloads.len();
-
-        if self.payloads.len() > 0 {
-            let index = self
-                .payloads
-                .iter()
-                .position(|itm| itm.has_buffer_to_fill());
-
-            if let Some(index) = index {
-                return self.payloads.get_mut(index).unwrap();
-            }
+    fn get_payload_to_append(&mut self) -> &mut TcpBufferChunk {
+        if self.payloads.is_empty() {
+            self.payloads
+                .push_back(TcpBufferChunk::new(self.reusable_buffer_size));
         }
 
-        let chink = if payload_size > self.reusable_buffer_size {
-            TcpBufferChunk::new(payload_size)
-        } else {
-            TcpBufferChunk::new(self.reusable_buffer_size)
-        };
-
-        self.payloads.push_back(chink);
-        self.payloads.get_mut(len).unwrap()
+        self.payloads.get_mut(0).unwrap()
     }
 
-    pub fn add_payload(&mut self, mut payload: &[u8]) {
-        loop {
-            let chunk = self.get_payload_to_append(payload.len());
+    pub fn add_payload(&mut self, payload: &[u8]) {
+        let chunk = self.get_payload_to_append();
 
-            let remains = chunk.append(payload);
-
-            if remains.is_none() {
-                break;
-            }
-
-            payload = remains.unwrap();
-        }
+        chunk.append(payload);
     }
 
     pub fn get_payload(&mut self) -> Option<TcpBufferChunk> {
@@ -68,25 +45,9 @@ impl TcpBufferToSend {
     }
 
     pub fn reuse_payload(&mut self, mut payload: TcpBufferChunk) {
-        if payload.capacity() != self.reusable_buffer_size {
-            return;
-        }
-
-        let mut amount_of_payloads_with_standard_capacity = 0;
-
-        for chunk in self.payloads.iter() {
-            if chunk.capacity() == self.reusable_buffer_size {
-                amount_of_payloads_with_standard_capacity += 1;
-            }
-
-            if amount_of_payloads_with_standard_capacity >= 2 {
-                return;
-            }
-        }
-
-        if amount_of_payloads_with_standard_capacity < 2 {
+        if self.payloads.len() < 2 {
             payload.reset();
-            self.payloads.push_back(payload);
+            self.payloads.push_back(payload)
         }
     }
 }
@@ -105,9 +66,9 @@ mod test {
 
         let first_chunk_created = chunk.created.unix_microseconds;
 
-        assert_eq!(&[1, 2, 3, 4, 5], chunk.get_slice_to_send(10).unwrap());
+        assert_eq!(&[1, 2, 3, 4, 5], chunk.get_next_slice_to_send(10).unwrap());
 
-        assert!(chunk.get_slice_to_send(10).is_none());
+        assert!(chunk.get_next_slice_to_send(10).is_none());
 
         tcp_payloads.reuse_payload(chunk);
 
@@ -116,9 +77,9 @@ mod test {
 
         assert_eq!(first_chunk_created, chunk.created.unix_microseconds);
 
-        assert_eq!(&[1, 2, 3, 4, 5], chunk.get_slice_to_send(10).unwrap());
+        assert_eq!(&[1, 2, 3, 4, 5], chunk.get_next_slice_to_send(10).unwrap());
 
-        assert!(chunk.get_slice_to_send(10).is_none());
+        assert!(chunk.get_next_slice_to_send(10).is_none());
 
         tcp_payloads.reuse_payload(chunk);
     }
@@ -129,16 +90,20 @@ mod test {
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
+        let mut chunk = tcp_payloads.get_payload().unwrap();
+
         assert_eq!(
             &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            tcp_payloads.get_payload().unwrap().as_slice()
+            chunk.get_next_slice_to_send(10).unwrap()
         );
+
+        assert!(chunk.get_next_slice_to_send(10).is_none());
 
         assert!(tcp_payloads.get_payload().is_none());
     }
 
     #[test]
-    fn test_amount_bugger_than_buffer() {
+    fn test_amount_bugger_than_reusable_buffer() {
         let mut tcp_payloads = TcpBufferToSend::new(10);
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -147,12 +112,12 @@ mod test {
 
         assert_eq!(
             &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            chunk.get_slice_to_send(10).unwrap()
+            chunk.get_next_slice_to_send(10).unwrap()
         );
 
-        assert_eq!(&[11, 12,], chunk.get_slice_to_send(10).unwrap());
+        assert_eq!(&[11, 12,], chunk.get_next_slice_to_send(10).unwrap());
 
-        assert!(chunk.get_slice_to_send(10).is_none());
+        assert!(chunk.get_next_slice_to_send(10).is_none());
     }
 
     #[test]
@@ -165,13 +130,22 @@ mod test {
 
         tcp_payloads.add_payload(&[8, 9, 10, 11, 12]);
 
-        let chunk = tcp_payloads.get_payload().unwrap();
+        let mut chunk = tcp_payloads.get_payload().unwrap();
 
-        assert_eq!(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], chunk.as_slice());
+        assert_eq!(
+            &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            chunk.reusable_buffer.as_slice()
+        );
 
-        let chunk = tcp_payloads.get_payload().unwrap();
+        assert_eq!(&[11, 12], chunk.additional_buffer.as_slice());
 
-        assert_eq!(chunk.capacity(), 10);
-        assert_eq!(&[11, 12], chunk.as_slice());
+        assert_eq!(
+            &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            chunk.get_next_slice_to_send(10).unwrap()
+        );
+
+        assert_eq!(&[11, 12], chunk.get_next_slice_to_send(10).unwrap());
+
+        assert!(chunk.get_next_slice_to_send(10).is_none());
     }
 }
