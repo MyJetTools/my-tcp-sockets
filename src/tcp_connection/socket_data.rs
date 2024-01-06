@@ -7,26 +7,28 @@ use tokio::{
     net::TcpStream,
 };
 
-use super::TcpPayloads;
+use super::TcpBufferToSend;
 
 use super::ConnectionStatistics;
 
 pub struct SocketData<TSerializer> {
     pub tcp_stream: WriteHalf<TcpStream>,
     serializer: TSerializer,
-    pub tcp_payloads: TcpPayloads,
+    pub tcp_payloads: TcpBufferToSend,
+    max_send_payload_size_to_send: usize,
 }
 
 impl<TSerializer> SocketData<TSerializer> {
     pub fn new(
         tcp_stream: WriteHalf<TcpStream>,
         serializer: TSerializer,
-        max_send_payload_size: usize,
+        max_send_payload_size_to_send: usize,
     ) -> Self {
         Self {
             tcp_stream,
             serializer,
-            tcp_payloads: TcpPayloads::new(max_send_payload_size),
+            tcp_payloads: TcpBufferToSend::new(1024 * 1024),
+            max_send_payload_size_to_send,
         }
     }
     pub fn get_serializer(&self) -> &TSerializer {
@@ -52,18 +54,21 @@ impl<TSerializer> SocketData<TSerializer> {
                 break;
             }
 
-            let payload = payload.unwrap();
+            let mut payload = payload.unwrap();
 
-            self.send_bytes(payload.as_slice(), send_time_out).await?;
+            while let Some(to_send) = payload.get_slice_to_send(self.max_send_payload_size_to_send)
+            {
+                self.send_bytes(to_send, send_time_out).await?;
+            }
 
             statistics.update_sent_amount(payload.len());
+
+            self.tcp_payloads.reuse_payload(payload);
 
             statistics
                 .pending_to_send_buffer_size
                 .store(self.tcp_payloads.get_size(), Ordering::SeqCst);
         }
-
-        self.tcp_payloads.shrink_capacity();
 
         Ok(())
     }
