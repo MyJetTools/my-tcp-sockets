@@ -97,7 +97,7 @@ impl<
         self.inner.get_log_context().await
     }
 
-    pub async fn send(&self, payload: &mut TContract) {
+    pub async fn send(&self, payload: &TContract) {
         if !self.inner.is_connected() {
             return;
         }
@@ -121,8 +121,8 @@ impl<
             return;
         }
 
-        let mut ping_contract = self.serializer.get_ping();
-        let payload = self.serializer.serialize(&mut ping_contract);
+        let ping_contract = self.serializer.get_ping();
+        let payload = self.serializer.serialize(&ping_contract);
         self.send_bytes(payload.as_slice()).await;
     }
 
