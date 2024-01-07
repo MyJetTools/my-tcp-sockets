@@ -99,7 +99,7 @@ impl TcpConnectionInner {
 
         let mut payload_to_send = payload_to_send.unwrap();
 
-        let mut disconnected = false;
+        let mut connection_has_error = false;
 
         {
             let mut write_access = self.stream.lock().await;
@@ -108,23 +108,16 @@ impl TcpConnectionInner {
                 payload_to_send.get_next_slice_to_send(self.max_send_payload_size)
             {
                 if write_access.send_payload_to_tcp_connection(payload).await {
-                    if self.process_disconnect(&mut write_access) {
-                        disconnected = true;
-                        break;
-                    }
+                    connection_has_error = true;
+                    break;
                 }
             }
         }
 
-        let mut inner = self.buffer_to_send_inner.lock().await;
-        if disconnected {
-            inner.buffer_to_send = None;
-            if inner.events_loop_is_started {
-                if let Some(events_loop) = &mut inner.events_loop {
-                    events_loop.stop();
-                }
-            }
+        if connection_has_error {
+            self.disconnect().await;
         } else {
+            let mut inner = self.buffer_to_send_inner.lock().await;
             if let Some(buffer_to_send) = &mut inner.buffer_to_send {
                 buffer_to_send.reuse_payload(payload_to_send);
             }
@@ -132,18 +125,27 @@ impl TcpConnectionInner {
     }
 
     pub async fn disconnect(&self) -> bool {
-        let mut write_access = self.stream.lock().await;
-        self.process_disconnect(&mut write_access)
-    }
+        let just_disconnected = {
+            let mut tcp_stream = self.stream.lock().await;
 
-    fn process_disconnect(&self, inner: &mut TcpConnectionStream) -> bool {
-        let result = inner.disconnect();
-        if result {
+            tcp_stream.disconnect()
+        };
+
+        if just_disconnected {
             self.connected
                 .store(false, std::sync::atomic::Ordering::Relaxed);
             self.statistics.disconnect();
+
+            let mut inner = self.buffer_to_send_inner.lock().await;
+
+            inner.buffer_to_send = None;
+            if inner.events_loop_is_started {
+                if let Some(events_loop) = &mut inner.events_loop {
+                    events_loop.stop();
+                }
+            }
         }
-        result
+        just_disconnected
     }
 
     pub fn is_connected(&self) -> bool {

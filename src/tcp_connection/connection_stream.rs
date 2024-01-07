@@ -28,7 +28,7 @@ impl TcpConnectionStream {
         }
     }
 
-    // If result is true - connections just being dropped
+    // If result is true - connections has error
     pub async fn send_payload_to_tcp_connection(&mut self, payload: &[u8]) -> bool {
         if let Some(tcp_stream) = self.tcp_stream.as_mut() {
             let result = tokio::time::timeout(self.send_time_out, tcp_stream.write_all(payload));
@@ -56,6 +56,7 @@ impl TcpConnectionStream {
         false
     }
 
+    // this function has to used only form connection_inner disconnect
     pub fn disconnect(&mut self) -> bool {
         if let Some(mut tcp_stream) = self.tcp_stream.take() {
             tokio::spawn(async move {
