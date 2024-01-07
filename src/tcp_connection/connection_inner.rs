@@ -34,6 +34,7 @@ pub struct TcpConnectionInner {
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
+    pub threads_statistics: Arc<crate::ThreadsStatistics>,
 }
 
 impl TcpConnectionInner {
@@ -41,6 +42,7 @@ impl TcpConnectionInner {
         stream: TcpConnectionStream,
         max_send_payload_size: usize,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
+        threads_statistics: Arc<crate::ThreadsStatistics>,
     ) -> Self {
         Self {
             stream: Mutex::new(stream),
@@ -49,6 +51,7 @@ impl TcpConnectionInner {
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),
             logger,
+            threads_statistics,
         }
     }
 
@@ -151,7 +154,15 @@ impl TcpConnectionInner {
 
 #[async_trait::async_trait]
 impl EventsLoopTick<()> for TcpConnectionInner {
+    async fn started(&self) {
+        self.threads_statistics.increase_read_threads();
+    }
+
     async fn tick(&self, _: ()) {
         self.push_send_buffer_to_connection().await;
+    }
+
+    async fn finished(&self) {
+        self.threads_statistics.decrease_read_threads();
     }
 }

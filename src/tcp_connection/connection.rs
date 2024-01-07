@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rust_extensions::events_loop::EventsLoop;
 use rust_extensions::Logger;
+use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop};
 
 use tokio::{io::WriteHalf, net::TcpStream};
 
@@ -12,7 +12,7 @@ use crate::{ConnectionId, TcpSocketSerializer};
 
 use super::{TcpConnectionInner, TcpConnectionStream};
 
-pub struct SocketConnection<TContract: Send + Sync + 'static, TSerializer>
+pub struct TcpSocketConnection<TContract: Send + Sync + 'static, TSerializer>
 where
     TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
 {
@@ -24,12 +24,13 @@ where
     pub dead_disconnect_timeout: Duration,
     cached_ping_payload: Option<Vec<u8>>,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
+    pub threads_statistics: Arc<crate::ThreadsStatistics>,
 }
 
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
-    > SocketConnection<TContract, TSerializer>
+    > TcpSocketConnection<TContract, TSerializer>
 {
     pub async fn new(
         socket: WriteHalf<TcpStream>,
@@ -42,6 +43,8 @@ impl<
         log_context: HashMap<String, String>,
         dead_disconnect_timeout: Duration,
         cached_ping_payload: Option<Vec<u8>>,
+        master_connection_name: &str,
+        threads_statistics: Arc<crate::ThreadsStatistics>,
     ) -> Self {
         let ping_packet = serializer.get_ping();
 
@@ -52,11 +55,14 @@ impl<
             connection_stream,
             max_send_payload_size,
             logger.clone(),
+            threads_statistics.clone(),
         ));
 
-        let send_to_socket_event_loop =
-            EventsLoop::new(format!("TcpConnection {}", id), logger.clone())
-                .set_iteration_timeout(Duration::from_secs(60));
+        let send_to_socket_event_loop = EventsLoop::new(
+            format!("TcpConnection {}.{}", master_connection_name, id),
+            logger.clone(),
+        )
+        .set_iteration_timeout(Duration::from_secs(60));
 
         send_to_socket_event_loop
             .register_event_loop(inner.clone())
@@ -75,6 +81,7 @@ impl<
             dead_disconnect_timeout,
             cached_ping_payload,
             serializer,
+            threads_statistics,
         }
     }
 
@@ -130,5 +137,13 @@ impl<
 
     pub fn statistics(&self) -> &super::ConnectionStatistics {
         &self.inner.statistics
+    }
+
+    pub fn is_dead(&self, now: DateTimeAsMicroseconds) -> bool {
+        let silence_duration = now
+            .duration_since(self.inner.statistics.last_receive_moment.as_date_time())
+            .as_positive_or_zero();
+
+        silence_duration > self.dead_disconnect_timeout
     }
 }

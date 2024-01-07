@@ -5,13 +5,12 @@ use std::time::Duration;
 use rust_extensions::Logger;
 use tokio::{net::TcpStream, sync::Mutex};
 
-use tokio::io;
+use tokio::io::{self, ReadHalf};
 
-use crate::tcp_connection::TcpContract;
-use crate::TcpClientSocketSettings;
 use crate::{
-    tcp_connection::SocketConnection, ConnectionId, SocketEventCallback, TcpSocketSerializer,
+    tcp_connection::TcpSocketConnection, ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
+use crate::{TcpClientSocketSettings, TcpContract, ThreadsStatistics};
 
 const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
 const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
@@ -21,10 +20,11 @@ pub struct TcpClient {
     re_connect_timeout: Duration,
     seconds_to_ping: usize,
     disconnect_timeout: Duration,
-    name: String,
+    name: Arc<String>,
     max_send_payload_size: usize,
     send_timeout: Duration,
     background_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    pub threads_statistics: Arc<ThreadsStatistics>,
 }
 
 impl TcpClient {
@@ -37,10 +37,11 @@ impl TcpClient {
             re_connect_timeout: Duration::from_secs(3),
             seconds_to_ping: 3,
             disconnect_timeout: Duration::from_secs(9),
-            name,
+            name: Arc::new(name),
             max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
             send_timeout: DEFAULT_SEND_TIMEOUT,
             background_task: Mutex::new(None),
+            threads_statistics: Arc::new(ThreadsStatistics::new()),
         }
     }
 
@@ -70,6 +71,7 @@ impl TcpClient {
         TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
         TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
     {
+        let threads_statistics = self.threads_statistics.clone();
         let handle = tokio::spawn(connection_loop(
             self.settings.clone(),
             self.re_connect_timeout,
@@ -81,6 +83,7 @@ impl TcpClient {
             self.max_send_payload_size,
             self.send_timeout,
             logger,
+            threads_statistics,
         ));
 
         let mut background_task = self.background_task.lock().await;
@@ -103,10 +106,11 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
     socket_callback: Arc<TSocketCallback>,
     seconds_to_ping: usize,
     disconnect_timeout: Duration,
-    socket_name: String,
+    socket_name: Arc<String>,
     max_send_payload_size: usize,
     send_timeout: Duration,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
+    threads_statistics: Arc<ThreadsStatistics>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -116,7 +120,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
     let mut connection_id: ConnectionId = 0;
 
     let mut socket_context = HashMap::new();
-    socket_context.insert("SocketName".to_string(), socket_name.clone());
+    socket_context.insert("SocketName".to_string(), socket_name.as_str().to_string());
 
     const LOG_PROCESS: &str = "Tcp Client Connect";
     loop {
@@ -164,7 +168,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                 };
 
                 let connection = Arc::new(
-                    SocketConnection::new(
+                    TcpSocketConnection::new(
                         write_socket,
                         serializer,
                         connection_id,
@@ -175,19 +179,21 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                         log_context,
                         disconnect_timeout,
                         cached_ping_payload,
+                        socket_name.as_str(),
+                        threads_statistics.clone(),
                     )
                     .await,
                 );
 
                 let read_serializer = serializer_factory();
 
-                crate::tcp_connection::new_connection::start(
+                handle_new_connection(
                     read_socket,
                     connection.clone(),
                     read_serializer,
-                    socket_callback.clone(),
-                    Some(seconds_to_ping),
                     logger.clone(),
+                    socket_callback.clone(),
+                    seconds_to_ping,
                 )
                 .await;
 
@@ -207,4 +213,35 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
             }
         }
     }
+}
+
+pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
+    read_socket: ReadHalf<TcpStream>,
+    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
+    read_serializer: TSerializer,
+    logger: Arc<dyn Logger + Send + Sync + 'static>,
+    socket_callback: Arc<TSocketCallback>,
+    seconds_to_ping: usize,
+) where
+    TContract: TcpContract + Send + Sync + 'static,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
+    TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
+{
+    tokio::spawn(super::dead_connection_detector::start(
+        connection.clone(),
+        seconds_to_ping,
+        logger.clone(),
+    ));
+
+    connection.threads_statistics.increase_read_threads();
+    crate::tcp_connection::read_loop::start(
+        read_socket,
+        connection.clone(),
+        read_serializer,
+        socket_callback,
+        logger.clone(),
+    )
+    .await;
+
+    connection.threads_statistics.decrease_read_threads();
 }

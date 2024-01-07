@@ -5,7 +5,7 @@ use tokio::{io::ReadHalf, net::TcpStream};
 
 use crate::{SocketEventCallback, TcpSocketSerializer};
 
-use super::{SocketConnection, TcpContract};
+use super::SocketConnection;
 
 pub async fn start<TContract, TSerializer, TSocketCallback>(
     read_socket: ReadHalf<TcpStream>,
@@ -19,17 +19,6 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
-    let ping_handle = if let Some(seconds_to_ping) = seconds_to_ping {
-        let handle = tokio::spawn(crate::tcp_connection::ping_loop::start(
-            connection.clone(),
-            seconds_to_ping,
-            logger.clone(),
-        ));
-        Some(handle)
-    } else {
-        None
-    };
-
     let connection_id = connection.id;
 
     crate::tcp_connection::read_loop::start(
@@ -41,17 +30,4 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
         connection.get_log_context().await,
     )
     .await;
-
-    if let Some(ping_handle) = ping_handle {
-        if let Err(err) = ping_handle.await {
-            logger.write_error(
-                "Connection handler".to_string(),
-                format!(
-                    "Socket ping {} loop exit with error: {}",
-                    connection_id, err
-                ),
-                Some(connection.get_log_context().await),
-            );
-        };
-    }
 }

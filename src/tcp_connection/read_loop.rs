@@ -1,23 +1,20 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 use tokio::{io::ReadHalf, net::TcpStream};
 
 use crate::{
     socket_reader::{ReadingTcpContractFail, SocketReaderTcpStream},
-    tcp_connection::SocketConnection,
-    ConnectionEvent, SocketEventCallback, TcpSocketSerializer,
+    tcp_connection::TcpSocketConnection,
+    ConnectionEvent, SocketEventCallback, TcpContract, TcpSocketSerializer,
 };
-
-use super::TcpContract;
 
 pub async fn start<TContract, TSerializer, TSocketCallback>(
     read_socket: ReadHalf<TcpStream>,
-    connection: Arc<SocketConnection<TContract, TSerializer>>,
+    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
     read_serializer: TSerializer,
     socket_callback: Arc<TSocketCallback>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
-    socket_context: HashMap<String, String>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -25,73 +22,64 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
 {
     let socket_callback_spawned = socket_callback.clone();
     let connection_spawned = connection.clone();
-    let result = tokio::spawn(async move {
+    let on_connect_result = tokio::spawn(async move {
         socket_callback_spawned
             .handle(ConnectionEvent::Connected(connection_spawned.clone()))
             .await;
     })
     .await;
 
-    match result {
+    match on_connect_result {
         Ok(_) => {
             let read_result = tokio::spawn(read_loop(
                 read_socket,
                 connection.clone(),
                 read_serializer,
                 socket_callback.clone(),
-                socket_context.clone(),
             ))
             .await;
 
             if let Err(err) = read_result {
                 logger.write_error(
                     "Socket Read Loop".to_string(),
-                    format!("Socket {} loop exit with error: {}", connection.id, err),
-                    Some(socket_context.clone()),
+                    format!("Socket Read loop exited with error: {}", err),
+                    Some(connection.get_log_context().await),
                 );
             }
         }
         Err(err) => {
             logger.write_fatal_error(
-                "Socket Read Loop".to_string(),
-                format!(
-                    "Socket {} connect callback had a panic: {}",
-                    connection.id, err
-                ),
-                Some(socket_context.clone()),
+                "Socket Read Loop On Connect".to_string(),
+                format!("{:?}", err),
+                Some(connection.get_log_context().await),
             );
         }
     }
 
     connection.disconnect().await;
 
-    let connection_id = connection.id;
-
-    let result = tokio::spawn(async move {
+    let connection_spawned = connection.clone();
+    let on_disconnect_result = tokio::spawn(async move {
         socket_callback
-            .handle(ConnectionEvent::Disconnected(connection.clone()))
+            .handle(ConnectionEvent::Disconnected(connection_spawned))
             .await;
     })
     .await;
 
-    if let Err(err) = result {
+    if let Err(err) = on_disconnect_result {
         logger.write_fatal_error(
-            "Socket Read Loop".to_string(),
-            format!(
-                "Socket {} connect callback had a panic: {}",
-                connection_id, err
-            ),
-            Some(socket_context.clone()),
+            "Socket Read Loop On Disconnect".to_string(),
+            format!("{:?}", err),
+            Some(connection.get_log_context().await),
         );
     }
 }
 
 async fn read_loop<TContract, TSerializer, TSocketCallback>(
     tcp_stream: ReadHalf<TcpStream>,
-    connection: Arc<SocketConnection<TContract, TSerializer>>,
+    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
     mut read_serializer: TSerializer,
     socket_callback: Arc<TSocketCallback>,
-    socket_context: HashMap<String, String>,
 ) -> Result<(), ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
@@ -111,7 +99,7 @@ where
             connection.logger.write_info(
                 "read_loop".to_string(),
                 format!("Read timeout {:?}", connection.dead_disconnect_timeout),
-                Some(socket_context),
+                Some(connection.get_log_context().await),
             );
 
             connection.disconnect().await;
