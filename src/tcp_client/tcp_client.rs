@@ -184,7 +184,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
                 connection
                     .send_to_socket_event_loop
-                    .start(connection.connection_state.clone(), logger.clone())
+                    .start(connection.connection_state.clone())
                     .await;
 
                 let read_serializer = serializer_factory();

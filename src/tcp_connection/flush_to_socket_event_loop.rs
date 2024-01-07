@@ -28,7 +28,11 @@ impl<TContract: Send + Sync + 'static, TSerializer> EventsLoopTick<()>
 where
     TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
 {
+    async fn started(&self) {}
+
     async fn tick(&self, _: ()) {
         self.connection.flush_to_socket().await;
     }
+
+    async fn finished(&self) {}
 }

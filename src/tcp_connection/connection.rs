@@ -76,10 +76,10 @@ impl<
             addr,
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),
-            logger,
+            logger: logger.clone(),
             ping_packet,
             send_timeout,
-            send_to_socket_event_loop: EventsLoop::new(format!("Connection {}", id)),
+            send_to_socket_event_loop: EventsLoop::new(format!("Connection {}", id), logger),
 
             connection_state: Arc::new(TcpConnectionStates::new()),
             dead_disconnect_timeout,
