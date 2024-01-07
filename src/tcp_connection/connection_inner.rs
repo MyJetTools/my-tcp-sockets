@@ -20,7 +20,7 @@ pub struct BufferToSendInner {
 impl BufferToSendInner {
     pub fn new() -> Self {
         Self {
-            buffer_to_send: Some(TcpBufferToSend::new(1024 * 1024)),
+            buffer_to_send: Some(TcpBufferToSend::new(65535)),
             events_loop: None,
             events_loop_is_started: false,
         }
