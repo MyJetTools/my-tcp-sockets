@@ -97,22 +97,13 @@ impl<
         self.inner.get_log_context().await
     }
 
-    pub async fn send(&self, payload: TContract) {
+    pub async fn send(&self, payload: &TContract) {
         if !self.inner.is_connected() {
             return;
         }
 
         let payload = self.serializer.serialize(payload);
         self.send_bytes(payload.as_slice()).await;
-    }
-
-    #[cfg(feature = "serialize_as_ref")]
-    pub async fn send_ref(&self, payload: &TContract) {
-        let mut write_access = self.single_threaded.lock().await;
-        if let Some(socket_data) = write_access.connection.as_mut() {
-            let payload = socket_data.get_serializer().serialize_ref(payload);
-            self.add_payload_to_send(socket_data, payload.as_slice());
-        }
     }
 
     pub async fn send_bytes(&self, payload: &[u8]) {
@@ -131,7 +122,7 @@ impl<
         }
 
         let ping_contract = self.serializer.get_ping();
-        let payload = self.serializer.serialize(ping_contract);
+        let payload = self.serializer.serialize(&ping_contract);
         self.send_bytes(payload.as_slice()).await;
     }
 
