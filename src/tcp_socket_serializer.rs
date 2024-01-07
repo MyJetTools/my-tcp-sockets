@@ -4,7 +4,7 @@ use crate::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 #[async_trait]
 pub trait TcpSocketSerializer<TContract: Send + Sync + 'static> {
-    const PING_PACKET_IS_SINGLETONE: bool;
+    const PING_PACKET_IS_SINGLETON: bool;
 
     fn serialize(&self, contract: TContract) -> Vec<u8>;
     #[cfg(feature = "serialize_as_ref")]
@@ -16,7 +16,4 @@ pub trait TcpSocketSerializer<TContract: Send + Sync + 'static> {
         &mut self,
         socket_reader: &mut TSocketReader,
     ) -> Result<TContract, ReadingTcpContractFail>;
-
-    #[cfg(feature = "statefull_serializer")]
-    fn apply_packet(&mut self, contract: &TContract) -> bool;
 }

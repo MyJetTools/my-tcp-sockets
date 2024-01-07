@@ -10,8 +10,7 @@ use tokio::io;
 use crate::tcp_connection::TcpContract;
 use crate::TcpClientSocketSettings;
 use crate::{
-    tcp_connection::{FlushToSocketEventLoop, SocketConnection},
-    ConnectionId, SocketEventCallback, TcpSocketSerializer,
+    tcp_connection::SocketConnection, ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
 
 const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
@@ -157,35 +156,28 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
                 let serializer = serializer_factory();
 
-                let cached_ping_payload = if TSerializer::PING_PACKET_IS_SINGLETONE {
+                let cached_ping_payload = if TSerializer::PING_PACKET_IS_SINGLETON {
                     let ping_payload = serializer.get_ping();
                     Some(serializer.serialize(ping_payload))
                 } else {
                     None
                 };
 
-                let connection = Arc::new(SocketConnection::new(
-                    write_socket,
-                    serializer,
-                    connection_id,
-                    None,
-                    logger.clone(),
-                    max_send_payload_size,
-                    send_timeout,
-                    log_context,
-                    disconnect_timeout,
-                    cached_ping_payload,
-                ));
-
-                connection
-                    .send_to_socket_event_loop
-                    .register_event_loop(Arc::new(FlushToSocketEventLoop::new(connection.clone())))
-                    .await;
-
-                connection
-                    .send_to_socket_event_loop
-                    .start(connection.connection_state.clone(), logger.clone())
-                    .await;
+                let connection = Arc::new(
+                    SocketConnection::new(
+                        write_socket,
+                        serializer,
+                        connection_id,
+                        None,
+                        logger.clone(),
+                        max_send_payload_size,
+                        send_timeout,
+                        log_context,
+                        disconnect_timeout,
+                        cached_ping_payload,
+                    )
+                    .await,
+                );
 
                 let read_serializer = serializer_factory();
 

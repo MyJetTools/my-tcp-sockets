@@ -17,7 +17,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     read_serializer: TSerializer,
     socket_callback: Arc<TSocketCallback>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
-    socket_context: Option<HashMap<String, String>>,
+    socket_context: HashMap<String, String>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
@@ -47,7 +47,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
                 logger.write_error(
                     "Socket Read Loop".to_string(),
                     format!("Socket {} loop exit with error: {}", connection.id, err),
-                    socket_context.clone(),
+                    Some(socket_context.clone()),
                 );
             }
         }
@@ -58,7 +58,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
                     "Socket {} connect callback had a panic: {}",
                     connection.id, err
                 ),
-                socket_context.clone(),
+                Some(socket_context.clone()),
             );
         }
     }
@@ -81,7 +81,7 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
                 "Socket {} connect callback had a panic: {}",
                 connection_id, err
             ),
-            socket_context.clone(),
+            Some(socket_context.clone()),
         );
     }
 }
@@ -91,7 +91,7 @@ async fn read_loop<TContract, TSerializer, TSocketCallback>(
     connection: Arc<SocketConnection<TContract, TSerializer>>,
     mut read_serializer: TSerializer,
     socket_callback: Arc<TSocketCallback>,
-    socket_context: Option<HashMap<String, String>>,
+    socket_context: HashMap<String, String>,
 ) -> Result<(), ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
@@ -111,34 +111,25 @@ where
             connection.logger.write_info(
                 "read_loop".to_string(),
                 format!("Read timeout {:?}", connection.dead_disconnect_timeout),
-                socket_context,
+                Some(socket_context),
             );
 
             connection.disconnect().await;
             return Err(ReadingTcpContractFail::SocketDisconnected);
         }
-        #[cfg(feature = "debug_incoming_traffic")]
-        println!("Got incoming package. Len:{}", socket_reader.read_size);
 
         let contract = read_result.unwrap()?;
 
         if contract.is_pong() {
-            connection.statistics.update_ping_pong_statistic();
-        }
-        #[cfg(feature = "statefull_serializer")]
-        let state_is_changed = read_serializer.apply_packet(&contract);
-
-        #[cfg(feature = "statefull_serializer")]
-        if state_is_changed {
-            connection.apply_payload_to_serializer(&contract).await;
+            connection.statistics().update_ping_pong_statistic();
         }
 
         connection
-            .statistics
+            .statistics()
             .update_read_amount(socket_reader.read_size);
 
         connection
-            .statistics
+            .statistics()
             .last_receive_moment
             .update(DateTimeAsMicroseconds::now());
 
