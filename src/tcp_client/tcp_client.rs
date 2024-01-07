@@ -162,7 +162,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
                 let cached_ping_payload = if TSerializer::PING_PACKET_IS_SINGLETON {
                     let mut ping_payload = serializer.get_ping();
-                    Some(serializer.serialize(&mut ping_payload))
+                    Some(serializer.serialize(&mut ping_payload).into_vec())
                 } else {
                     None
                 };
