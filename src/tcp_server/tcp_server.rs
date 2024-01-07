@@ -108,8 +108,8 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                 let serializer = serializer_factory();
 
                 let cached_ping_payload = if TSerializer::PING_PACKET_IS_SINGLETON {
-                    let ping_payload = serializer.get_ping();
-                    Some(serializer.serialize(&ping_payload))
+                    let mut ping_payload = serializer.get_ping();
+                    Some(serializer.serialize(&mut ping_payload))
                 } else {
                     None
                 };
