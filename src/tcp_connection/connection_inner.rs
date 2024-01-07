@@ -75,6 +75,10 @@ impl TcpConnectionInner {
                     panic!("Events loop is not set");
                 }
             }
+
+            if let Some(events_loop) = &write_access.events_loop {
+                events_loop.send(());
+            }
         }
     }
 
