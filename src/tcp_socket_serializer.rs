@@ -23,6 +23,23 @@ impl<'s> TcpPayload<'s> {
     }
 }
 
+impl<'s> Into<TcpPayload<'s>> for &'s Vec<u8> {
+    fn into(self) -> TcpPayload<'s> {
+        TcpPayload::AsSlice(self)
+    }
+}
+
+impl<'s> Into<TcpPayload<'s>> for &'s [u8] {
+    fn into(self) -> TcpPayload<'s> {
+        TcpPayload::AsSlice(self)
+    }
+}
+impl<'s> Into<TcpPayload<'s>> for Vec<u8> {
+    fn into(self) -> TcpPayload<'s> {
+        TcpPayload::AsVec(self)
+    }
+}
+
 #[async_trait]
 pub trait TcpSocketSerializer<TContract: Send + Sync + 'static> {
     const PING_PACKET_IS_SINGLETON: bool;
