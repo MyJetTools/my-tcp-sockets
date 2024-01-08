@@ -177,15 +177,14 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                     cached_ping_payload,
                 ));
 
-                connection
-                    .send_to_socket_event_loop
-                    .register_event_loop(Arc::new(FlushToSocketEventLoop::new(connection.clone())))
-                    .await;
+                {
+                    let mut event_loop = connection.send_to_socket_event_loop.write().await;
+                    event_loop.register_event_loop(Arc::new(FlushToSocketEventLoop::new(
+                        connection.clone(),
+                    )));
 
-                connection
-                    .send_to_socket_event_loop
-                    .start(connection.connection_state.clone())
-                    .await;
+                    event_loop.start(connection.connection_state.clone());
+                }
 
                 let read_serializer = serializer_factory();
 

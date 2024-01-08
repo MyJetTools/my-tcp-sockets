@@ -7,6 +7,7 @@ use std::time::Duration;
 use rust_extensions::events_loop::EventsLoop;
 use rust_extensions::Logger;
 
+use tokio::sync::RwLock;
 use tokio::{io::WriteHalf, net::TcpStream, sync::Mutex};
 
 use tokio::io::AsyncWriteExt;
@@ -41,7 +42,7 @@ where
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub ping_packet: TContract,
     pub send_timeout: Duration,
-    pub send_to_socket_event_loop: EventsLoop<()>,
+    pub send_to_socket_event_loop: RwLock<EventsLoop<()>>,
     pub connection_state: Arc<TcpConnectionStates>,
     pub dead_disconnect_timeout: Duration,
     cached_ping_payload: Option<Vec<u8>>,
@@ -79,7 +80,10 @@ impl<
             logger: logger.clone(),
             ping_packet,
             send_timeout,
-            send_to_socket_event_loop: EventsLoop::new(format!("Connection {}", id), logger),
+            send_to_socket_event_loop: RwLock::new(EventsLoop::new(
+                format!("Connection {}", id),
+                logger,
+            )),
 
             connection_state: Arc::new(TcpConnectionStates::new()),
             dead_disconnect_timeout,
@@ -105,7 +109,8 @@ impl<
 
         self.statistics.disconnect();
 
-        self.send_to_socket_event_loop.stop();
+        let send_to_socket_event_loop = self.send_to_socket_event_loop.read().await;
+        send_to_socket_event_loop.stop();
 
         return true;
     }
@@ -120,7 +125,8 @@ impl<
 
         if let Some(socket_data) = write_access.connection.as_mut() {
             let payload = socket_data.get_serializer().serialize(payload);
-            self.add_payload_to_send(socket_data, payload.as_slice());
+            self.add_payload_to_send(socket_data, payload.as_slice())
+                .await;
         }
     }
 
@@ -136,11 +142,11 @@ impl<
     pub async fn send_bytes(&self, payload: &[u8]) {
         let mut write_access = self.single_threaded.lock().await;
         if let Some(socket_data) = write_access.connection.as_mut() {
-            self.add_payload_to_send(socket_data, payload);
+            self.add_payload_to_send(socket_data, payload).await;
         }
     }
 
-    fn add_payload_to_send(&self, socket_data: &mut SocketData<TSerializer>, payload: &[u8]) {
+    async fn add_payload_to_send(&self, socket_data: &mut SocketData<TSerializer>, payload: &[u8]) {
         #[cfg(feature = "debug_outcoming_traffic")]
         println!(
             "Send {} bytes to tcp socket. First byte:[{}]",
@@ -149,7 +155,11 @@ impl<
         );
 
         socket_data.tcp_payloads.add_payload(payload);
-        self.send_to_socket_event_loop.send(());
+
+        {
+            let event_loop = self.send_to_socket_event_loop.read().await;
+            event_loop.send(());
+        }
 
         self.statistics
             .pending_to_send_buffer_size
@@ -198,13 +208,14 @@ impl<
 
         if let Some(socket_data) = &mut single_threaded.connection {
             if let Some(ping_payload) = &self.cached_ping_payload {
-                self.add_payload_to_send(socket_data, ping_payload);
+                self.add_payload_to_send(socket_data, ping_payload).await;
                 return;
             }
 
             let ping_contract = socket_data.get_serializer().get_ping();
             let payload = socket_data.get_serializer().serialize(ping_contract);
-            self.add_payload_to_send(socket_data, payload.as_slice());
+            self.add_payload_to_send(socket_data, payload.as_slice())
+                .await;
         }
     }
 }

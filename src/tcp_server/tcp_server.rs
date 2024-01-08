@@ -131,15 +131,15 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     cached_ping_payload,
                 ));
 
-                connection
-                    .send_to_socket_event_loop
-                    .register_event_loop(Arc::new(FlushToSocketEventLoop::new(connection.clone())))
-                    .await;
+                {
+                    let mut event_loop = connection.send_to_socket_event_loop.write().await;
 
-                connection
-                    .send_to_socket_event_loop
-                    .start(connection.connection_state.clone())
-                    .await;
+                    event_loop.register_event_loop(Arc::new(FlushToSocketEventLoop::new(
+                        connection.clone(),
+                    )));
+
+                    event_loop.start(connection.connection_state.clone());
+                }
 
                 tokio::task::spawn(handle_new_connection(
                     read_socket,
