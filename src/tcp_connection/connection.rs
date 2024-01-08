@@ -107,6 +107,20 @@ impl<
             .await
     }
 
+    pub async fn send_many(&self, contracts: &[TContract]) {
+        if !self.inner.is_connected() {
+            return;
+        }
+
+        self.inner
+            .push_payload(|tcp_buffer_chunk| {
+                for contract in contracts {
+                    self.serializer.serialize(tcp_buffer_chunk, contract)
+                }
+            })
+            .await
+    }
+
     pub async fn send_bytes(&self, payload: &[u8]) {
         self.inner
             .push_payload(|tcp_buffer_chunk| tcp_buffer_chunk.push_slice(payload))
