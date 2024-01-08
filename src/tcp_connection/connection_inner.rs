@@ -45,7 +45,7 @@ impl TcpConnectionInner {
         write_access.events_loop = Some(send_to_socket_event_loop);
     }
 
-    pub async fn push_payload(&self, push_payload: impl Fn(&mut TcpBufferChunk) -> ()) {
+    pub async fn push_payload(&self, push_payload: impl Fn(&mut TcpBufferChunk) -> ()) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
         write_access.push_payload(push_payload)
     }

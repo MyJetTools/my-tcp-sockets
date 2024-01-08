@@ -97,9 +97,9 @@ impl<
         self.inner.get_log_context().await
     }
 
-    pub async fn send(&self, contract: &TContract) {
+    pub async fn send(&self, contract: &TContract) -> usize {
         if !self.inner.is_connected() {
-            return;
+            return 0;
         }
 
         self.inner
@@ -107,9 +107,9 @@ impl<
             .await
     }
 
-    pub async fn send_many(&self, contracts: &[TContract]) {
+    pub async fn send_many(&self, contracts: &[TContract]) -> usize {
         if !self.inner.is_connected() {
-            return;
+            return 0;
         }
 
         self.inner
@@ -121,7 +121,11 @@ impl<
             .await
     }
 
-    pub async fn send_bytes(&self, payload: &[u8]) {
+    pub async fn send_bytes(&self, payload: &[u8]) -> usize {
+        if !self.inner.is_connected() {
+            return 0;
+        }
+
         self.inner
             .push_payload(|tcp_buffer_chunk| tcp_buffer_chunk.push_slice(payload))
             .await

@@ -19,9 +19,10 @@ impl BufferToSendWrapper {
         }
     }
 
-    pub fn push_payload(&mut self, add_payload: impl Fn(&mut TcpBufferChunk) -> ()) {
+    pub fn push_payload(&mut self, add_payload: impl Fn(&mut TcpBufferChunk) -> ()) -> usize {
+        let mut result = 0;
         if let Some(buffer_to_send) = self.buffer_to_send.as_mut() {
-            buffer_to_send.add_payload_directly_to_chunk(add_payload);
+            result = buffer_to_send.add_payload_directly_to_chunk(add_payload);
 
             if !self.events_loop_is_started {
                 if let Some(events_loop) = &mut self.events_loop {
@@ -37,5 +38,7 @@ impl BufferToSendWrapper {
                 events_loop.send(());
             }
         }
+
+        result
     }
 }
