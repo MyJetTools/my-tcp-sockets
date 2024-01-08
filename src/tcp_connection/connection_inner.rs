@@ -67,9 +67,9 @@ impl TcpConnectionInner {
             buffer_to_send.add_payload(payload);
 
             if !write_access.events_loop_is_started {
-                if let Some(events_loop) = &write_access.events_loop {
+                if let Some(events_loop) = &mut write_access.events_loop {
                     let tcp_connection_states = TcpConnectionStates::new();
-                    events_loop.start(Arc::new(tcp_connection_states)).await;
+                    events_loop.start(Arc::new(tcp_connection_states));
                     write_access.events_loop_is_started = true;
                 } else {
                     panic!("Events loop is not set");
