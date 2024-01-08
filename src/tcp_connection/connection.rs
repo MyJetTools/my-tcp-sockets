@@ -97,17 +97,20 @@ impl<
         self.inner.get_log_context().await
     }
 
-    pub async fn send(&self, payload: &TContract) {
+    pub async fn send(&self, contract: &TContract) {
         if !self.inner.is_connected() {
             return;
         }
 
-        let payload = self.serializer.serialize(payload);
-        self.send_bytes(payload.as_slice()).await;
+        self.inner
+            .push_payload(|tcp_buffer_chunk| self.serializer.serialize(tcp_buffer_chunk, contract))
+            .await
     }
 
     pub async fn send_bytes(&self, payload: &[u8]) {
-        self.inner.push_payload_to_send_buffer(payload).await
+        self.inner
+            .push_payload(|tcp_buffer_chunk| tcp_buffer_chunk.push_slice(payload))
+            .await
     }
 
     pub async fn set_connection_name(&self, name: String) {
@@ -122,8 +125,7 @@ impl<
         }
 
         let ping_contract = self.serializer.get_ping();
-        let payload = self.serializer.serialize(&ping_contract);
-        self.send_bytes(payload.as_slice()).await;
+        self.send(&ping_contract).await;
     }
 
     pub fn statistics(&self) -> &super::ConnectionStatistics {

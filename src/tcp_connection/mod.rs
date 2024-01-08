@@ -6,6 +6,7 @@ mod one_second_metric;
 
 pub mod read_loop;
 mod tcp_buffer_to_send;
+pub use tcp_buffer_to_send::*;
 mod tcp_connection_states;
 pub use connection::TcpSocketConnection;
 pub use connection_statistics::ConnectionStatistics;
@@ -15,3 +16,5 @@ pub use tcp_buffer_to_send::TcpBufferToSend;
 pub use tcp_connection_states::TcpConnectionStates;
 mod connection_inner;
 pub use connection_inner::*;
+mod buffer_to_send_wrapper;
+pub use buffer_to_send_wrapper::*;

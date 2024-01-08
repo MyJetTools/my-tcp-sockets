@@ -27,7 +27,16 @@ impl TcpBufferToSend {
     pub fn add_payload(&mut self, payload: &[u8]) {
         let chunk = self.get_payload_to_append();
 
-        chunk.append(payload);
+        chunk.push_slice(payload);
+    }
+
+    pub fn add_payload_directly_to_chunk(
+        &mut self,
+        tcp_buffer_chunk: impl Fn(&mut TcpBufferChunk) -> (),
+    ) {
+        let chunk = self.get_payload_to_append();
+
+        tcp_buffer_chunk(chunk);
     }
 
     pub fn get_payload(&mut self) -> Option<TcpBufferChunk> {

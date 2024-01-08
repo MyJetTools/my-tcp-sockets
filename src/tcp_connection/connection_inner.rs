@@ -9,27 +9,11 @@ use rust_extensions::{
 };
 use tokio::sync::Mutex;
 
-use super::{ConnectionStatistics, TcpBufferToSend, TcpConnectionStates, TcpConnectionStream};
-
-pub struct BufferToSendInner {
-    pub buffer_to_send: Option<TcpBufferToSend>,
-    pub events_loop: Option<EventsLoop<()>>,
-    pub events_loop_is_started: bool,
-}
-
-impl BufferToSendInner {
-    pub fn new(reusable_send_buffer_size: usize) -> Self {
-        Self {
-            buffer_to_send: Some(TcpBufferToSend::new(reusable_send_buffer_size)),
-            events_loop: None,
-            events_loop_is_started: false,
-        }
-    }
-}
+use super::{BufferToSendWrapper, ConnectionStatistics, TcpBufferChunk, TcpConnectionStream};
 
 pub struct TcpConnectionInner {
     pub stream: Mutex<TcpConnectionStream>,
-    pub buffer_to_send_inner: Mutex<BufferToSendInner>,
+    pub buffer_to_send_inner: Mutex<BufferToSendWrapper>,
     max_send_payload_size: usize,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
@@ -47,7 +31,7 @@ impl TcpConnectionInner {
     ) -> Self {
         Self {
             stream: Mutex::new(stream),
-            buffer_to_send_inner: Mutex::new(BufferToSendInner::new(reusable_send_buffer_size)),
+            buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new(reusable_send_buffer_size)),
             max_send_payload_size,
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),
@@ -61,26 +45,9 @@ impl TcpConnectionInner {
         write_access.events_loop = Some(send_to_socket_event_loop);
     }
 
-    pub async fn push_payload_to_send_buffer(&self, payload: &[u8]) {
+    pub async fn push_payload(&self, push_payload: impl Fn(&mut TcpBufferChunk) -> ()) {
         let mut write_access = self.buffer_to_send_inner.lock().await;
-
-        if let Some(buffer_to_send) = write_access.buffer_to_send.as_mut() {
-            buffer_to_send.add_payload(payload);
-
-            if !write_access.events_loop_is_started {
-                if let Some(events_loop) = &mut write_access.events_loop {
-                    let tcp_connection_states = TcpConnectionStates::new();
-                    events_loop.start(Arc::new(tcp_connection_states));
-                    write_access.events_loop_is_started = true;
-                } else {
-                    panic!("Events loop is not set");
-                }
-            }
-
-            if let Some(events_loop) = &write_access.events_loop {
-                events_loop.send(());
-            }
-        }
+        write_access.push_payload(push_payload)
     }
 
     pub async fn push_send_buffer_to_connection(&self) {

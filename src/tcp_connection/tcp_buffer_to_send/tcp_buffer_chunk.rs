@@ -1,3 +1,5 @@
+use crate::TcpWriteBuffer;
+
 pub struct TcpBufferChunk {
     pub reusable_data_is_sent: bool,
     pub reusable_buffer: Vec<u8>,
@@ -19,7 +21,23 @@ impl TcpBufferChunk {
         }
     }
 
-    pub fn append<'s>(&mut self, new_data: &'s [u8]) {
+    pub fn push_byte(&mut self, b: u8) {
+        let reusable_buffer_capacity = self.reusable_buffer.capacity();
+        if self.reusable_buffer.len() == reusable_buffer_capacity {
+            self.additional_buffer.push(b);
+            return;
+        }
+
+        let size_after = self.reusable_buffer.len() + 1;
+        if size_after <= reusable_buffer_capacity {
+            self.reusable_buffer.push(b);
+            return;
+        }
+
+        self.reusable_buffer.push(b);
+    }
+
+    pub fn push_slice<'s>(&mut self, new_data: &'s [u8]) {
         let reusable_buffer_capacity = self.reusable_buffer.capacity();
         if self.reusable_buffer.len() == reusable_buffer_capacity {
             self.additional_buffer.extend_from_slice(new_data);
@@ -88,6 +106,15 @@ impl TcpBufferChunk {
     }
 }
 
+impl TcpWriteBuffer for TcpBufferChunk {
+    fn write_byte(&mut self, b: u8) {
+        self.push_byte(b);
+    }
+    fn write_slice(&mut self, slice: &[u8]) {
+        self.push_slice(slice)
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -97,7 +124,7 @@ mod tests {
 
         let data_to_add = vec![0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8];
 
-        chunk.append(&data_to_add);
+        chunk.push_slice(&data_to_add);
 
         assert_eq!(chunk.reusable_buffer.as_slice(), &[0u8, 1u8, 2u8, 3u8, 4u8]);
 
