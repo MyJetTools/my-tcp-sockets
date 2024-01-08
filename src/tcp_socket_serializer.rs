@@ -9,7 +9,7 @@ use crate::{
 pub trait TcpSocketSerializer<TContract: Send + Sync + 'static> {
     const PING_PACKET_IS_SINGLETON: bool;
 
-    fn serialize(&self, out: &mut dyn TcpWriteBuffer, contract: &TContract);
+    fn serialize(&self, out: &mut impl TcpWriteBuffer, contract: &TContract);
 
     fn get_ping(&self) -> TContract;
 
