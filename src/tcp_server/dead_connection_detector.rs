@@ -18,7 +18,7 @@ pub async fn start_server_dead_connection_detector<
         let now = DateTimeAsMicroseconds::now();
 
         if connection.is_dead(now) {
-            connection.logger.write_info(
+            connection.logger.write_debug_info(
                 "Server dead connection detector".to_string(),
                 format!("Detected dead socket. Disconnecting"),
                 Some(connection.get_log_context().await),

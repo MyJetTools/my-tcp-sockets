@@ -45,7 +45,7 @@ impl TcpConnectionStream {
                 Err(_) => format!("Timeout"),
             };
 
-            self.logger.write_info(
+            self.logger.write_debug_info(
                 "send_payload_to_tcp_connection".to_string(),
                 err,
                 Some(self.log_context.clone()),

@@ -146,7 +146,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
         let mut socket_context = socket_context.clone();
         socket_context.insert("HostPort".to_string(), host_port.clone());
 
-        logger.write_info(
+        logger.write_debug_info(
             LOG_PROCESS.to_string(),
             format!("Trying to connect to {}", host_port),
             Some(socket_context.clone()),
@@ -155,7 +155,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
 
         match connect_result {
             Ok(tcp_stream) => {
-                logger.write_info(
+                logger.write_debug_info(
                     LOG_PROCESS.to_string(),
                     format!("Connected to {}. Id: {}", host_port, connection_id),
                     Some(socket_context.clone()),
@@ -206,7 +206,7 @@ async fn connection_loop<TContract, TSerializer, TSerializeFactory, TSocketCallb
                 )
                 .await;
 
-                logger.write_info(
+                logger.write_debug_info(
                     LOG_PROCESS.to_string(),
                     format!("Disconnected from {}", host_port),
                     Some(socket_context.clone()),

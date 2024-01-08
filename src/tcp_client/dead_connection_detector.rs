@@ -34,7 +34,7 @@ pub async fn start<
         let now = DateTimeAsMicroseconds::now();
 
         if connection.is_dead(now) {
-            logger.write_info(
+            logger.write_debug_info(
                 "TcpClientPingLoop".to_string(),
                 format!("Detected dead socket {}. Disconnecting", connection.id),
                 Some(connection.get_log_context().await),

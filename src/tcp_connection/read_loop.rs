@@ -96,7 +96,7 @@ where
             tokio::time::timeout(connection.dead_disconnect_timeout, read_future).await;
 
         if let Err(_) = &read_result {
-            connection.logger.write_info(
+            connection.logger.write_debug_info(
                 "read_loop".to_string(),
                 format!("Read timeout {:?}", connection.dead_disconnect_timeout),
                 Some(connection.get_log_context().await),
