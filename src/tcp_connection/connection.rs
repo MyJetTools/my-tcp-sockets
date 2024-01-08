@@ -58,12 +58,13 @@ impl<
             threads_statistics.clone(),
         ));
 
-        let send_to_socket_event_loop = EventsLoop::new(
+        let mut send_to_socket_event_loop = EventsLoop::new(
             format!("TcpConnection {}.{}", master_connection_name, id),
             logger.clone(),
         )
-        .set_iteration_timeout(Duration::from_secs(60))
-        .register_event_loop(inner.clone());
+        .set_iteration_timeout(Duration::from_secs(60));
+
+        send_to_socket_event_loop.register_event_loop(inner.clone());
 
         inner
             .set_send_to_socket_event_loop(send_to_socket_event_loop)
