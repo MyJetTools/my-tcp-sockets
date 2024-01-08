@@ -18,9 +18,9 @@ pub struct BufferToSendInner {
 }
 
 impl BufferToSendInner {
-    pub fn new() -> Self {
+    pub fn new(reusable_send_buffer_size: usize) -> Self {
         Self {
-            buffer_to_send: Some(TcpBufferToSend::new(65535)),
+            buffer_to_send: Some(TcpBufferToSend::new(reusable_send_buffer_size)),
             events_loop: None,
             events_loop_is_started: false,
         }
@@ -41,12 +41,13 @@ impl TcpConnectionInner {
     pub fn new(
         stream: TcpConnectionStream,
         max_send_payload_size: usize,
+        reusable_send_buffer_size: usize,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         threads_statistics: Arc<crate::ThreadsStatistics>,
     ) -> Self {
         Self {
             stream: Mutex::new(stream),
-            buffer_to_send_inner: Mutex::new(BufferToSendInner::new()),
+            buffer_to_send_inner: Mutex::new(BufferToSendInner::new(reusable_send_buffer_size)),
             max_send_payload_size,
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),

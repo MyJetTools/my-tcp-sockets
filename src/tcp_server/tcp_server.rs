@@ -21,6 +21,7 @@ pub struct TcpServer {
     name: Arc<String>,
     max_send_payload_size: usize,
     send_timeout: Duration,
+    reusable_send_buffer_size: usize,
     pub threads_statistics: Arc<ThreadsStatistics>,
 }
 
@@ -32,7 +33,13 @@ impl TcpServer {
             max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
             send_timeout: DEFAULT_SEND_TIMEOUT,
             threads_statistics: Arc::new(ThreadsStatistics::new()),
+            reusable_send_buffer_size: 65535,
         }
+    }
+
+    pub fn set_reusable_send_buffer_size(mut self, reusable_send_buffer_size: usize) -> Self {
+        self.reusable_send_buffer_size = reusable_send_buffer_size;
+        self
     }
 
     pub async fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
@@ -54,6 +61,7 @@ impl TcpServer {
             socket_callback.clone(),
             self.name.clone(),
             self.max_send_payload_size,
+            self.reusable_send_buffer_size,
             self.send_timeout,
             app_states,
             logger,
@@ -68,6 +76,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
     socket_callback: Arc<TSocketCallback>,
     context_name: Arc<String>,
     max_send_payload_size: usize,
+    reusable_send_buffer_size: usize,
     send_timeout: Duration,
     app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
@@ -128,6 +137,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                         cached_ping_payload,
                         context_name.as_str(),
                         threads_statistics.clone(),
+                        reusable_send_buffer_size,
                     )
                     .await,
                 );

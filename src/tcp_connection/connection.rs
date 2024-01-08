@@ -45,6 +45,7 @@ impl<
         cached_ping_payload: Option<Vec<u8>>,
         master_connection_name: &str,
         threads_statistics: Arc<crate::ThreadsStatistics>,
+        reusable_send_buffer_size: usize,
     ) -> Self {
         let ping_packet = serializer.get_ping();
 
@@ -54,6 +55,7 @@ impl<
         let inner = Arc::new(TcpConnectionInner::new(
             connection_stream,
             max_send_payload_size,
+            reusable_send_buffer_size,
             logger.clone(),
             threads_statistics.clone(),
         ));
