@@ -47,11 +47,7 @@ impl<'s> Into<TcpPayload<'s>> for Vec<u8> {
 pub trait TcpSocketSerializer<TContract: Send + Sync + 'static> {
     const PING_PACKET_IS_SINGLETON: bool;
 
-    fn serialize<'s, TTcpWriteBuffer: TcpWriteBuffer + Send + Sync + 'static>(
-        &self,
-        out: &mut TTcpWriteBuffer,
-        contract: &'s TContract,
-    );
+    fn serialize(&self, out: &mut dyn TcpWriteBuffer, contract: &TContract);
 
     fn get_ping(&self) -> TContract;
 
