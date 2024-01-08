@@ -54,6 +54,6 @@ impl ThreadsStatistics {
     }
 
     pub fn get_ping_threads(&self) -> usize {
-        self.write_threads.load(std::sync::atomic::Ordering::SeqCst)
+        self.ping_threads.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
