@@ -45,30 +45,30 @@ impl TcpConnectionInner {
             statistics: ConnectionStatistics::new(),
             logger,
             threads_statistics,
-            read_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted as i32),
-            write_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted as i32),
+            read_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted.as_i32()),
+            write_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted.as_i32()),
         }
     }
 
     pub fn update_write_thread_status(&self, status: TcpThreadStatus) {
         self.write_thread_status
-            .store(status as i32, std::sync::atomic::Ordering::Relaxed);
+            .store(status.as_i32(), std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn update_read_thread_status(&self, status: TcpThreadStatus) {
         self.read_thread_status
-            .store(status as i32, std::sync::atomic::Ordering::Relaxed);
+            .store(status.as_i32(), std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn get_read_thread_status(&self) -> TcpThreadStatus {
         self.read_thread_status
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(std::sync::atomic::Ordering::SeqCst)
             .into()
     }
 
     pub fn get_write_thread_status(&self) -> TcpThreadStatus {
         self.write_thread_status
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(std::sync::atomic::Ordering::SeqCst)
             .into()
     }
 

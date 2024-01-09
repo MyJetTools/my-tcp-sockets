@@ -12,6 +12,7 @@ use crate::{ConnectionId, TcpSocketSerializer};
 
 use super::{TcpConnectionInner, TcpConnectionStream};
 
+#[derive(Debug)]
 pub enum TcpThreadStatus {
     NotStarted,
     Started,
@@ -19,6 +20,14 @@ pub enum TcpThreadStatus {
 }
 
 impl TcpThreadStatus {
+    pub fn as_i32(&self) -> i32 {
+        match self {
+            TcpThreadStatus::NotStarted => 0,
+            TcpThreadStatus::Started => 1,
+            TcpThreadStatus::Finished => 2,
+        }
+    }
+
     pub fn is_finished(&self) -> bool {
         match self {
             TcpThreadStatus::Finished => true,
