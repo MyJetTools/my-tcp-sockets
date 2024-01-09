@@ -44,6 +44,7 @@ pub async fn start_server_dead_connection_detector<
             );
 
             connection.disconnect().await;
+            break;
         }
     }
 
