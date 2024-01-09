@@ -7,8 +7,8 @@ use tokio::{
 };
 
 use crate::{
-    tcp_connection::TcpSocketConnection, ConnectionId, SocketEventCallback, TcpContract,
-    TcpSocketSerializer, ThreadsStatistics,
+    tcp_connection::{TcpSocketConnection, TcpThreadStatus},
+    ConnectionId, SocketEventCallback, TcpContract, TcpSocketSerializer, ThreadsStatistics,
 };
 
 //use super::ConnectionsList;
@@ -176,6 +176,7 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     );
 
     connection.threads_statistics.increase_read_threads();
+    connection.update_read_thread_status(TcpThreadStatus::Started);
     crate::tcp_connection::read_loop::start(
         read_socket,
         connection.clone(),
@@ -185,4 +186,5 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     )
     .await;
     connection.threads_statistics.decrease_read_threads();
+    connection.update_read_thread_status(TcpThreadStatus::Finished);
 }

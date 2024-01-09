@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
@@ -16,6 +16,12 @@ pub async fn start_server_dead_connection_detector<
     loop {
         tokio::time::sleep(sleep_duration).await;
 
+        if connection.get_read_thread_status().is_finished()
+            && connection.get_write_thread_status().is_finished()
+        {
+            break;
+        }
+
         let now = DateTimeAsMicroseconds::now();
 
         if connection.is_dead(now) {
@@ -26,7 +32,6 @@ pub async fn start_server_dead_connection_detector<
             );
 
             connection.disconnect().await;
-            break;
         }
     }
 

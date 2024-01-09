@@ -7,6 +7,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 
 use tokio::io::{self, ReadHalf};
 
+use crate::tcp_connection::TcpThreadStatus;
 use crate::{
     tcp_connection::TcpSocketConnection, ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
@@ -243,6 +244,7 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     ));
 
     connection.threads_statistics.increase_read_threads();
+    connection.update_read_thread_status(TcpThreadStatus::Started);
     crate::tcp_connection::read_loop::start(
         read_socket,
         connection.clone(),
@@ -251,6 +253,6 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
         logger.clone(),
     )
     .await;
-
+    connection.update_read_thread_status(TcpThreadStatus::Finished);
     connection.threads_statistics.decrease_read_threads();
 }

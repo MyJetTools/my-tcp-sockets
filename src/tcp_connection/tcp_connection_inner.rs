@@ -1,6 +1,9 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicI32},
+        Arc,
+    },
 };
 
 use rust_extensions::{
@@ -9,7 +12,10 @@ use rust_extensions::{
 };
 use tokio::sync::Mutex;
 
-use super::{BufferToSendWrapper, ConnectionStatistics, TcpBufferChunk, TcpConnectionStream};
+use super::{
+    tcp_connection::TcpThreadStatus, BufferToSendWrapper, ConnectionStatistics, TcpBufferChunk,
+    TcpConnectionStream,
+};
 
 pub struct TcpConnectionInner {
     pub stream: Mutex<TcpConnectionStream>,
@@ -19,6 +25,8 @@ pub struct TcpConnectionInner {
     pub statistics: ConnectionStatistics,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub threads_statistics: Arc<crate::ThreadsStatistics>,
+    read_thread_status: AtomicI32,
+    write_thread_status: AtomicI32,
 }
 
 impl TcpConnectionInner {
@@ -37,7 +45,31 @@ impl TcpConnectionInner {
             statistics: ConnectionStatistics::new(),
             logger,
             threads_statistics,
+            read_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted as i32),
+            write_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted as i32),
         }
+    }
+
+    pub fn update_write_thread_status(&self, status: TcpThreadStatus) {
+        self.write_thread_status
+            .store(status as i32, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn update_read_thread_status(&self, status: TcpThreadStatus) {
+        self.read_thread_status
+            .store(status as i32, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn get_read_thread_status(&self) -> TcpThreadStatus {
+        self.read_thread_status
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .into()
+    }
+
+    pub fn get_write_thread_status(&self) -> TcpThreadStatus {
+        self.write_thread_status
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .into()
     }
 
     pub async fn set_send_to_socket_event_loop(&self, send_to_socket_event_loop: EventsLoop<()>) {
@@ -130,6 +162,8 @@ impl TcpConnectionInner {
 impl EventsLoopTick<()> for TcpConnectionInner {
     async fn started(&self) {
         //println!("EventsLoop started: {:?}", self.get_log_context().await);
+
+        self.update_write_thread_status(TcpThreadStatus::Started);
         self.threads_statistics.increase_write_threads();
     }
 
@@ -139,6 +173,7 @@ impl EventsLoopTick<()> for TcpConnectionInner {
 
     async fn finished(&self) {
         // println!("EventsLoop finished: {:?}", self.get_log_context().await);
+        self.update_write_thread_status(TcpThreadStatus::Finished);
         self.threads_statistics.decrease_write_threads();
     }
 }

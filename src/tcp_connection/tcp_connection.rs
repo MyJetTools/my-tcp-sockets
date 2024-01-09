@@ -12,6 +12,32 @@ use crate::{ConnectionId, TcpSocketSerializer};
 
 use super::{TcpConnectionInner, TcpConnectionStream};
 
+pub enum TcpThreadStatus {
+    NotStarted,
+    Started,
+    Finished,
+}
+
+impl TcpThreadStatus {
+    pub fn is_finished(&self) -> bool {
+        match self {
+            TcpThreadStatus::Finished => true,
+            _ => false,
+        }
+    }
+}
+
+impl Into<TcpThreadStatus> for i32 {
+    fn into(self) -> TcpThreadStatus {
+        match self {
+            0 => TcpThreadStatus::NotStarted,
+            1 => TcpThreadStatus::Started,
+            2 => TcpThreadStatus::Finished,
+            _ => panic!("Invalid value {} for ThreadStatus", self),
+        }
+    }
+}
+
 pub struct TcpSocketConnection<TContract: Send + Sync + 'static, TSerializer>
 where
     TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
@@ -95,6 +121,18 @@ impl<
 
     pub async fn get_log_context(&self) -> HashMap<String, String> {
         self.inner.get_log_context().await
+    }
+
+    pub fn update_read_thread_status(&self, status: TcpThreadStatus) {
+        self.inner.update_read_thread_status(status);
+    }
+
+    pub fn get_read_thread_status(&self) -> TcpThreadStatus {
+        self.inner.get_read_thread_status()
+    }
+
+    pub fn get_write_thread_status(&self) -> TcpThreadStatus {
+        self.inner.get_write_thread_status()
     }
 
     pub async fn send(&self, contract: &TContract) -> usize {

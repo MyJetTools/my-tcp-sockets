@@ -11,7 +11,7 @@ mod tcp_connection_states;
 pub use connection_statistics::ConnectionStatistics;
 pub use one_second_metric::OneSecondMetric;
 pub use tcp_buffer_to_send::TcpBufferToSend;
-pub use tcp_connection::TcpSocketConnection;
+pub use tcp_connection::*;
 pub use tcp_connection_states::TcpConnectionStates;
 pub use tcp_connection_stream::*;
 mod tcp_connection_inner;
