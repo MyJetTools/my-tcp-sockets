@@ -18,8 +18,14 @@ pub async fn start<
 
     connection.threads_statistics.increase_ping_threads();
 
-    while connection.is_connected() {
+    loop {
         tokio::time::sleep(ping_interval).await;
+
+        if connection.get_read_thread_status().is_finished()
+            && connection.get_write_thread_status().is_finished()
+        {
+            break;
+        }
 
         connection.statistics().one_second_tick();
 
