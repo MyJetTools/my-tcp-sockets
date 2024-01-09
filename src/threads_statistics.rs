@@ -1,17 +1,17 @@
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::AtomicI64;
 
 pub struct ThreadsStatistics {
-    pub read_threads: AtomicUsize,
-    pub write_threads: AtomicUsize,
-    pub ping_threads: AtomicUsize,
+    pub read_threads: AtomicI64,
+    pub write_threads: AtomicI64,
+    pub ping_threads: AtomicI64,
 }
 
 impl ThreadsStatistics {
     pub fn new() -> Self {
         Self {
-            read_threads: AtomicUsize::new(0),
-            write_threads: AtomicUsize::new(0),
-            ping_threads: AtomicUsize::new(0),
+            read_threads: AtomicI64::new(0),
+            write_threads: AtomicI64::new(0),
+            ping_threads: AtomicI64::new(0),
         }
     }
 
@@ -45,15 +45,15 @@ impl ThreadsStatistics {
             .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
     }
 
-    pub fn get_read_threads(&self) -> usize {
+    pub fn get_read_threads(&self) -> i64 {
         self.read_threads.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    pub fn get_write_threads(&self) -> usize {
+    pub fn get_write_threads(&self) -> i64 {
         self.write_threads.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    pub fn get_ping_threads(&self) -> usize {
+    pub fn get_ping_threads(&self) -> i64 {
         self.ping_threads.load(std::sync::atomic::Ordering::SeqCst)
     }
 }

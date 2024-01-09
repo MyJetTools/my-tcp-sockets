@@ -132,7 +132,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                         max_send_payload_size,
                         send_timeout,
                         log_context,
-                        Duration::from_secs(60),
+                        Duration::from_secs(20),
                         cached_ping_payload,
                         context_name.as_str(),
                         threads_statistics.clone(),

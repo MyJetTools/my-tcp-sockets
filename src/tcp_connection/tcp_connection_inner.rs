@@ -129,7 +129,7 @@ impl TcpConnectionInner {
 #[async_trait::async_trait]
 impl EventsLoopTick<()> for TcpConnectionInner {
     async fn started(&self) {
-        println!("EventsLoop started: {:?}", self.get_log_context().await);
+        //println!("EventsLoop started: {:?}", self.get_log_context().await);
         self.threads_statistics.increase_read_threads();
     }
 
@@ -138,7 +138,7 @@ impl EventsLoopTick<()> for TcpConnectionInner {
     }
 
     async fn finished(&self) {
-        println!("EventsLoop finished: {:?}", self.get_log_context().await);
+        // println!("EventsLoop finished: {:?}", self.get_log_context().await);
         self.threads_statistics.decrease_read_threads();
     }
 }
