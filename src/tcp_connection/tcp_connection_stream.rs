@@ -6,25 +6,32 @@ use tokio::{
     net::TcpStream,
 };
 
+use crate::ConnectionId;
+
 pub struct TcpConnectionStream {
     tcp_stream: Option<WriteHalf<TcpStream>>,
-    log_context: HashMap<String, String>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     send_time_out: Duration,
+    connection_name: Option<String>,
+    master_socket_name: Arc<String>,
+    pub id: ConnectionId,
 }
 
 impl TcpConnectionStream {
     pub fn new(
+        id: ConnectionId,
         tcp_stream: WriteHalf<TcpStream>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
-        log_context: HashMap<String, String>,
         send_time_out: Duration,
+        master_socket_name: Arc<String>,
     ) -> Self {
         Self {
             tcp_stream: Some(tcp_stream),
-            log_context,
             logger,
             send_time_out,
+            connection_name: None,
+            master_socket_name,
+            id,
         }
     }
 
@@ -48,7 +55,7 @@ impl TcpConnectionStream {
             self.logger.write_debug_info(
                 "send_payload_to_tcp_connection".to_string(),
                 err,
-                Some(self.log_context.clone()),
+                Some(self.get_log_context()),
             );
             return true;
         }
@@ -68,12 +75,21 @@ impl TcpConnectionStream {
         false
     }
 
-    pub fn get_log_context(&self) -> &HashMap<String, String> {
-        &self.log_context
+    pub fn get_log_context(&self) -> HashMap<String, String> {
+        let mut result = HashMap::with_capacity(3);
+        result.insert(
+            "TcpSocketName".to_string(),
+            self.master_socket_name.as_str().to_string(),
+        );
+        result.insert("Id".to_string(), self.id.to_string());
+        if let Some(connection_name) = &self.connection_name {
+            result.insert("TcpConnectionName".to_string(), connection_name.to_string());
+        }
+
+        result
     }
 
     pub fn set_connection_name(&mut self, name: String) {
-        self.log_context
-            .insert("ConnectionName".to_string(), name.to_string());
+        self.connection_name = Some(name);
     }
 }

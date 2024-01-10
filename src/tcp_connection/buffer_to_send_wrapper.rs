@@ -2,20 +2,33 @@ use std::sync::Arc;
 
 use rust_extensions::events_loop::EventsLoop;
 
+use crate::TcpSocketSerializer;
+
 use super::{TcpBufferChunk, TcpBufferToSend, TcpConnectionStates};
 
-pub struct BufferToSendWrapper {
+pub struct BufferToSendWrapper<
+    TContract: Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+> {
     pub buffer_to_send: Option<TcpBufferToSend>,
     pub events_loop: Option<EventsLoop<()>>,
     pub events_loop_is_started: bool,
+    pub serializer: Option<TSerializer>,
+    phantom_contract: std::marker::PhantomData<TContract>,
 }
 
-impl BufferToSendWrapper {
+impl<
+        TContract: Send + Sync + 'static,
+        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    > BufferToSendWrapper<TContract, TSerializer>
+{
     pub fn new(reusable_send_buffer_size: usize) -> Self {
         Self {
             buffer_to_send: Some(TcpBufferToSend::new(reusable_send_buffer_size)),
             events_loop: None,
             events_loop_is_started: false,
+            serializer: None,
+            phantom_contract: std::marker::PhantomData,
         }
     }
 

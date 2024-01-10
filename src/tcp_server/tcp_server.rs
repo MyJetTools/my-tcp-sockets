@@ -43,22 +43,20 @@ impl TcpServer {
         self
     }
 
-    pub async fn start<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
+    pub async fn start<TContract, TSerializer, TSocketCallback>(
         &self,
-        serializer_factory: Arc<TSerializeFactory>,
+
         socket_callback: Arc<TSocketCallback>,
         app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
         TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
         TContract: TcpContract + Send + Sync + 'static,
-        TSerializeFactory: Send + Sync + 'static + Fn() -> TSerializer,
         TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
     {
         let threads_statistics = self.threads_statistics.clone();
         tokio::spawn(accept_sockets_loop(
             self.addr,
-            serializer_factory.clone(),
             socket_callback.clone(),
             self.name.clone(),
             self.max_send_payload_size,
@@ -71,9 +69,8 @@ impl TcpServer {
     }
 }
 
-async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketCallback>(
+async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback>(
     addr: SocketAddr,
-    serializer_factory: Arc<TSerializeFactory>,
     socket_callback: Arc<TSocketCallback>,
     context_name: Arc<String>,
     max_send_payload_size: usize,
@@ -85,7 +82,6 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
-    TSerializeFactory: Fn() -> TSerializer,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
     while !app_states.is_initialized() {
@@ -111,31 +107,20 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     break;
                 }
 
-                let mut log_context = HashMap::new();
-                log_context.insert("Id".to_string(), connection_id.to_string());
-                log_context.insert("ServerSocketName".to_string(), context_name.to_string());
-
-                let serializer = serializer_factory();
-
-                let cached_ping_payload = if TSerializer::PING_PACKET_IS_SINGLETON {
-                    Some(serializer.get_ping_as_payload())
-                } else {
-                    None
-                };
+                //let mut log_context = HashMap::new();
+                //log_context.insert("Id".to_string(), connection_id.to_string());
+                //log_context.insert("ServerSocketName".to_string(), context_name.to_string());
 
                 let connection = Arc::new(
                     TcpSocketConnection::new(
+                        context_name.clone(),
                         write_socket,
-                        serializer,
                         connection_id,
                         Some(socket_addr),
                         logger.clone(),
                         max_send_payload_size,
                         send_timeout,
-                        log_context,
                         Duration::from_secs(20),
-                        cached_ping_payload,
-                        context_name.as_str(),
                         threads_statistics.clone(),
                         reusable_send_buffer_size,
                     )
@@ -144,7 +129,6 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
 
                 let logger_spawned = logger.clone();
                 let socket_callback = socket_callback.clone();
-                let read_serializer = serializer_factory();
                 tokio::task::spawn(async move {
                     connection.threads_statistics.read_threads.increase();
                     connection.update_read_thread_status(TcpThreadStatus::Started);
@@ -152,7 +136,6 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     handle_new_connection(
                         read_tcp_stream,
                         &connection,
-                        read_serializer,
                         logger_spawned,
                         socket_callback,
                     )
@@ -176,7 +159,6 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
 pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     tcp_stream: ReadHalf<TcpStream>,
     connection: &Arc<TcpSocketConnection<TContract, TSerializer>>,
-    mut read_serializer: TSerializer,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
 ) where
@@ -185,6 +167,8 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
     let mut socket_reader = SocketReaderTcpStream::new(tcp_stream);
+
+    let mut read_serializer = TSerializer::create_serializer();
 
     let result = super::read::read_first_server_packet(
         connection,
@@ -216,8 +200,8 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
 
     crate::tcp_connection::read_loop::start(
         socket_reader,
-        &connection,
         read_serializer,
+        &connection,
         &socket_callback,
         logger.clone(),
     )

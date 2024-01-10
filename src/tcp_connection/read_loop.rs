@@ -10,8 +10,8 @@ use crate::{
 
 pub async fn start<TContract, TSerializer, TSocketCallback>(
     socket_reader: SocketReaderTcpStream,
-    connection: &Arc<TcpSocketConnection<TContract, TSerializer>>,
     read_serializer: TSerializer,
+    connection: &Arc<TcpSocketConnection<TContract, TSerializer>>,
     socket_callback: &Arc<TSocketCallback>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
@@ -27,8 +27,8 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     let read_result = tokio::spawn(async move {
         let read_result = read_loop(
             socket_reader,
-            connection_spawned.clone(),
             read_serializer,
+            connection_spawned.clone(),
             socket_callback,
         )
         .await;
@@ -54,8 +54,8 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
 
 async fn read_loop<TContract, TSerializer, TSocketCallback>(
     mut socket_reader: SocketReaderTcpStream,
-    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
     mut read_serializer: TSerializer,
+    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
     socket_callback: Arc<TSocketCallback>,
 ) -> Result<(), ReadingTcpContractFail>
 where

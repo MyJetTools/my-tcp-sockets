@@ -12,14 +12,18 @@ use rust_extensions::{
 };
 use tokio::sync::Mutex;
 
+use crate::TcpSocketSerializer;
+
 use super::{
-    tcp_connection::TcpThreadStatus, BufferToSendWrapper, ConnectionStatistics, TcpBufferChunk,
-    TcpConnectionStream,
+    tcp_connection::TcpThreadStatus, BufferToSendWrapper, ConnectionStatistics, TcpConnectionStream,
 };
 
-pub struct TcpConnectionInner {
+pub struct TcpConnectionInner<
+    TContract: Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+> {
     pub stream: Mutex<TcpConnectionStream>,
-    pub buffer_to_send_inner: Mutex<BufferToSendWrapper>,
+    pub buffer_to_send_inner: Mutex<BufferToSendWrapper<TContract, TSerializer>>,
     max_send_payload_size: usize,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
@@ -29,7 +33,11 @@ pub struct TcpConnectionInner {
     write_thread_status: AtomicI32,
 }
 
-impl TcpConnectionInner {
+impl<
+        TContract: Send + Sync + 'static,
+        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    > TcpConnectionInner<TContract, TSerializer>
+{
     pub fn new(
         stream: TcpConnectionStream,
         max_send_payload_size: usize,
@@ -77,9 +85,69 @@ impl TcpConnectionInner {
         write_access.events_loop = Some(send_to_socket_event_loop);
     }
 
-    pub async fn push_payload(&self, push_payload: impl Fn(&mut TcpBufferChunk) -> ()) -> usize {
+    pub async fn push_contract(&self, contract: &TContract) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
-        write_access.push_payload(push_payload)
+
+        if write_access.serializer.is_none() {
+            write_access.serializer = Some(TSerializer::create_serializer());
+        }
+
+        let serializer = write_access.serializer.take().unwrap();
+
+        let result = write_access.push_payload(|tcp_buffer_chunk| {
+            serializer.serialize(tcp_buffer_chunk, contract);
+        });
+
+        write_access.serializer = Some(serializer);
+
+        result
+    }
+
+    pub async fn push_many_contracts(&self, contracts: &[TContract]) -> usize {
+        let mut write_access = self.buffer_to_send_inner.lock().await;
+
+        if write_access.serializer.is_none() {
+            write_access.serializer = Some(TSerializer::create_serializer());
+        }
+
+        let serializer = write_access.serializer.take().unwrap();
+
+        let result = write_access.push_payload(|tcp_buffer_chunk| {
+            for contract in contracts {
+                serializer.serialize(tcp_buffer_chunk, contract);
+            }
+        });
+
+        write_access.serializer = Some(serializer);
+
+        result
+    }
+    pub async fn send_ping(&self) -> usize {
+        let mut write_access = self.buffer_to_send_inner.lock().await;
+
+        if write_access.serializer.is_none() {
+            write_access.serializer = Some(TSerializer::create_serializer());
+        }
+
+        let serializer = write_access.serializer.take().unwrap();
+
+        let ping = serializer.get_ping();
+
+        let result = write_access.push_payload(|tcp_buffer_chunk| {
+            serializer.serialize(tcp_buffer_chunk, &ping);
+        });
+
+        write_access.serializer = Some(serializer);
+
+        result
+    }
+
+    pub async fn push_payload(&self, payload: &[u8]) -> usize {
+        let mut write_access = self.buffer_to_send_inner.lock().await;
+
+        write_access.push_payload(|tcp_buffer_chunk| {
+            tcp_buffer_chunk.push_slice(payload);
+        })
     }
 
     pub async fn push_send_buffer_to_connection(&self) {
@@ -159,7 +227,11 @@ impl TcpConnectionInner {
 }
 
 #[async_trait::async_trait]
-impl EventsLoopTick<()> for TcpConnectionInner {
+impl<
+        TContract: Send + Sync + 'static,
+        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer>
+{
     async fn started(&self) {
         //println!("EventsLoop started: {:?}", self.get_log_context().await);
 

@@ -51,13 +51,11 @@ pub struct TcpSocketConnection<TContract: Send + Sync + 'static, TSerializer>
 where
     TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
 {
-    inner: Arc<TcpConnectionInner>,
-    serializer: TSerializer,
-    pub addr: Option<SocketAddr>,
     pub id: ConnectionId,
-    pub ping_packet: TContract,
+    inner: Arc<TcpConnectionInner<TContract, TSerializer>>,
+
+    pub addr: Option<SocketAddr>,
     pub dead_disconnect_timeout: Duration,
-    cached_ping_payload: Option<Vec<u8>>,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub threads_statistics: Arc<crate::ThreadsStatistics>,
 }
@@ -68,24 +66,25 @@ impl<
     > TcpSocketConnection<TContract, TSerializer>
 {
     pub async fn new(
+        master_socket_name: Arc<String>,
         socket: WriteHalf<TcpStream>,
-        serializer: TSerializer,
         id: ConnectionId,
         addr: Option<SocketAddr>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         max_send_payload_size: usize,
         send_timeout: Duration,
-        log_context: HashMap<String, String>,
         dead_disconnect_timeout: Duration,
-        cached_ping_payload: Option<Vec<u8>>,
-        master_connection_name: &str,
         threads_statistics: Arc<crate::ThreadsStatistics>,
         reusable_send_buffer_size: usize,
     ) -> Self {
-        let ping_packet = serializer.get_ping();
+        let mut send_to_socket_event_loop = EventsLoop::new(
+            format!("TcpConnection {}.{}", master_socket_name.as_str(), id),
+            logger.clone(),
+        )
+        .set_iteration_timeout(Duration::from_secs(60));
 
         let connection_stream =
-            TcpConnectionStream::new(socket, logger.clone(), log_context, send_timeout);
+            TcpConnectionStream::new(id, socket, logger.clone(), send_timeout, master_socket_name);
 
         threads_statistics.connections_objects.increase();
 
@@ -97,12 +96,6 @@ impl<
             threads_statistics.clone(),
         ));
 
-        let mut send_to_socket_event_loop = EventsLoop::new(
-            format!("TcpConnection {}.{}", master_connection_name, id),
-            logger.clone(),
-        )
-        .set_iteration_timeout(Duration::from_secs(60));
-
         send_to_socket_event_loop.register_event_loop(inner.clone());
 
         inner
@@ -110,14 +103,11 @@ impl<
             .await;
 
         Self {
+            id,
             inner,
             logger,
-            id,
             addr,
-            ping_packet,
             dead_disconnect_timeout,
-            cached_ping_payload,
-            serializer,
             threads_statistics,
         }
     }
@@ -151,9 +141,7 @@ impl<
             return 0;
         }
 
-        self.inner
-            .push_payload(|tcp_buffer_chunk| self.serializer.serialize(tcp_buffer_chunk, contract))
-            .await
+        self.inner.push_contract(contract).await
     }
 
     pub async fn send_many(&self, contracts: &[TContract]) -> usize {
@@ -161,13 +149,7 @@ impl<
             return 0;
         }
 
-        self.inner
-            .push_payload(|tcp_buffer_chunk| {
-                for contract in contracts {
-                    self.serializer.serialize(tcp_buffer_chunk, contract)
-                }
-            })
-            .await
+        self.inner.push_many_contracts(contracts).await
     }
 
     pub async fn send_bytes(&self, payload: &[u8]) -> usize {
@@ -175,9 +157,7 @@ impl<
             return 0;
         }
 
-        self.inner
-            .push_payload(|tcp_buffer_chunk| tcp_buffer_chunk.push_slice(payload))
-            .await
+        self.inner.push_payload(payload).await
     }
 
     pub async fn set_connection_name(&self, name: String) {
@@ -185,14 +165,12 @@ impl<
         write_access.set_connection_name(name);
     }
 
-    pub async fn send_ping(&self) {
-        if let Some(cached_ping_payload) = self.cached_ping_payload.as_ref() {
-            self.send_bytes(cached_ping_payload).await;
-            return;
+    pub async fn send_ping(&self) -> usize {
+        if !self.inner.is_connected() {
+            return 0;
         }
 
-        let ping_contract = self.serializer.get_ping();
-        self.send(&ping_contract).await;
+        self.inner.send_ping().await
     }
 
     pub fn statistics(&self) -> &super::ConnectionStatistics {
