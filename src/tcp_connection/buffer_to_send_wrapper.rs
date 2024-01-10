@@ -16,7 +16,7 @@ pub struct BufferToSendWrapper<
     pub events_loop_is_started: bool,
     pub serializer: Option<TSerializer>,
     phantom_contract: std::marker::PhantomData<TContract>,
-    phantom_metadata: std::marker::PhantomData<TSerializationMetadata>,
+    pub meta_data: Option<TSerializationMetadata>,
 }
 
 impl<
@@ -32,7 +32,7 @@ impl<
             events_loop_is_started: false,
             serializer: None,
             phantom_contract: std::marker::PhantomData,
-            phantom_metadata: std::marker::PhantomData,
+            meta_data: None,
         }
     }
 

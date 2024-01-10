@@ -8,7 +8,7 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop
 
 use tokio::{io::WriteHalf, net::TcpStream};
 
-use crate::{ConnectionId, TcpSocketSerializer};
+use crate::{ConnectionId, TcpSerializationMetadata, TcpSocketSerializer};
 
 use super::{TcpConnectionInner, TcpConnectionStream};
 
@@ -54,7 +54,7 @@ pub struct TcpSocketConnection<
 > where
     TSerializer:
         Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: Default + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
 {
     pub id: ConnectionId,
     inner: Arc<TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>>,
@@ -68,7 +68,7 @@ pub struct TcpSocketConnection<
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: Default + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
     > TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {
     pub async fn new(
@@ -142,24 +142,20 @@ impl<
         self.inner.get_write_thread_status()
     }
 
-    pub async fn send(&self, contract: &TContract, metadata: &TSerializationMetadata) -> usize {
+    pub async fn send(&self, contract: &TContract) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.push_contract(contract, metadata).await
+        self.inner.push_contract(contract).await
     }
 
-    pub async fn send_many(
-        &self,
-        contracts: &[TContract],
-        metadata: &TSerializationMetadata,
-    ) -> usize {
+    pub async fn send_many(&self, contracts: &[TContract]) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.push_many_contracts(contracts, metadata).await
+        self.inner.push_many_contracts(contracts).await
     }
 
     pub async fn send_bytes(&self, payload: &[u8]) -> usize {
@@ -194,12 +190,25 @@ impl<
 
         silence_duration > self.dead_disconnect_timeout
     }
+
+    pub async fn apply_incoming_packet_to_metadata(&self, contract: &TContract) {
+        let mut write_access = self.inner.buffer_to_send_inner.lock().await;
+        if write_access.meta_data.is_none() {
+            write_access.meta_data = Some(TSerializationMetadata::default());
+        }
+
+        write_access
+            .meta_data
+            .as_mut()
+            .unwrap()
+            .apply_tcp_contract(contract);
+    }
 }
 
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: Default + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
     > Drop for TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {
     fn drop(&mut self) {

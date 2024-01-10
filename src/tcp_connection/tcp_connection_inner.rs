@@ -12,7 +12,7 @@ use rust_extensions::{
 };
 use tokio::sync::Mutex;
 
-use crate::TcpSocketSerializer;
+use crate::{TcpSerializationMetadata, TcpSocketSerializer};
 
 use super::{
     tcp_connection::TcpThreadStatus, BufferToSendWrapper, ConnectionStatistics, TcpConnectionStream,
@@ -21,7 +21,7 @@ use super::{
 pub struct TcpConnectionInner<
     TContract: Send + Sync + 'static,
     TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: Default + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
 > {
     pub stream: Mutex<TcpConnectionStream>,
     pub buffer_to_send_inner:
@@ -38,7 +38,7 @@ pub struct TcpConnectionInner<
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: Default + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
     > TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
     pub fn new(
@@ -88,48 +88,58 @@ impl<
         write_access.events_loop = Some(send_to_socket_event_loop);
     }
 
-    pub async fn push_contract(
-        &self,
-        contract: &TContract,
-        meta_data: &TSerializationMetadata,
-    ) -> usize {
+    pub async fn push_contract(&self, contract: &TContract) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
             write_access.serializer = Some(TSerializer::default());
         }
 
+        if write_access.meta_data.is_none() {
+            write_access.meta_data = Some(TSerializationMetadata::default());
+        }
+
         let serializer = write_access.serializer.take().unwrap();
 
+        let meta_data = write_access.meta_data.take().unwrap();
+
+        if write_access.serializer.is_none() {
+            write_access.serializer = Some(TSerializer::default());
+        }
+
         let result = write_access.push_payload(|tcp_buffer_chunk| {
-            serializer.serialize(tcp_buffer_chunk, contract, meta_data);
+            serializer.serialize(tcp_buffer_chunk, contract, &meta_data);
         });
 
         write_access.serializer = Some(serializer);
+        write_access.meta_data = Some(meta_data);
 
         result
     }
 
-    pub async fn push_many_contracts(
-        &self,
-        contracts: &[TContract],
-        meta_data: &TSerializationMetadata,
-    ) -> usize {
+    pub async fn push_many_contracts(&self, contracts: &[TContract]) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
             write_access.serializer = Some(TSerializer::default());
         }
 
+        if write_access.meta_data.is_none() {
+            write_access.meta_data = Some(TSerializationMetadata::default());
+        }
+
         let serializer = write_access.serializer.take().unwrap();
+        let meta_data = write_access.meta_data.take().unwrap();
 
         let result = write_access.push_payload(|tcp_buffer_chunk| {
             for contract in contracts {
-                serializer.serialize(tcp_buffer_chunk, contract, meta_data);
+                serializer.serialize(tcp_buffer_chunk, contract, &meta_data);
             }
         });
 
         write_access.serializer = Some(serializer);
+
+        write_access.meta_data = Some(meta_data);
 
         result
     }
@@ -241,7 +251,7 @@ impl<
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: Default + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
     > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
     async fn started(&self) {

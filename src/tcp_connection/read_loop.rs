@@ -82,6 +82,13 @@ where
         )
         .await?;
 
+        if !TSerializationMetadata::THERE_IS_METADATA {
+            meta_data.apply_tcp_contract(&contract);
+            connection
+                .apply_incoming_packet_to_metadata(&contract)
+                .await;
+        }
+
         socket_callback
             .handle(ConnectionEvent::Payload {
                 connection: connection.clone(),
@@ -151,7 +158,7 @@ where
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
 {
     let socket_callback = socket_callback.clone();
     let connection_spawned = connection.clone();
@@ -190,7 +197,7 @@ pub async fn execute_on_disconnected<
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
 {
     let connection_spawned = connection.clone();
     let socket_callback = socket_callback.clone();

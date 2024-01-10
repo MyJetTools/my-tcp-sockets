@@ -42,7 +42,12 @@ where
 
     let contract = response.unwrap()?;
 
-    meta_data.apply_tcp_contract(&contract);
+    if !TSerializationMetadata::THERE_IS_METADATA {
+        meta_data.apply_tcp_contract(&contract);
+        connection
+            .apply_incoming_packet_to_metadata(&contract)
+            .await;
+    }
 
     let socket_callback = socket_callback.clone();
     let connection = connection.clone();
