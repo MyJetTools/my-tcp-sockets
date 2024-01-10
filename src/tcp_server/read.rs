@@ -21,15 +21,8 @@ where
     let response = tokio::time::timeout(Duration::from_secs(3), first_packet_reading).await;
 
     if response.is_err() {
-        connection.disconnect().await;
         return Err(ReadingTcpContractFail::Timeout);
     }
 
-    let response = response.unwrap();
-
-    if response.is_err() {
-        connection.disconnect().await;
-    }
-
-    response
+    response.unwrap()
 }

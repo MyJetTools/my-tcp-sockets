@@ -260,7 +260,7 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     connection.update_read_thread_status(TcpThreadStatus::Started);
     crate::tcp_connection::read_loop::start(
         socket_reader,
-        connection.clone(),
+        &connection,
         read_serializer,
         &socket_callback,
         logger.clone(),

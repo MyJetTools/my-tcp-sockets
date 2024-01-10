@@ -10,7 +10,7 @@ use crate::{
 
 pub async fn start<TContract, TSerializer, TSocketCallback>(
     socket_reader: SocketReaderTcpStream,
-    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
+    connection: &Arc<TcpSocketConnection<TContract, TSerializer>>,
     read_serializer: TSerializer,
     socket_callback: &Arc<TSocketCallback>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,

@@ -104,7 +104,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
     loop {
         match listener.accept().await {
             Ok((tcp_stream, socket_addr)) => {
-                let (read_socket, mut write_socket) = io::split(tcp_stream);
+                let (read_tcp_stream, mut write_socket) = io::split(tcp_stream);
 
                 if app_states.is_shutting_down() {
                     write_socket.shutdown().await.unwrap();
@@ -142,13 +142,25 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     .await,
                 );
 
-                tokio::task::spawn(handle_new_connection(
-                    read_socket,
-                    connection,
-                    serializer_factory(),
-                    logger.clone(),
-                    socket_callback.clone(),
-                ));
+                let logger_spawned = logger.clone();
+                let socket_callback = socket_callback.clone();
+                let read_serializer = serializer_factory();
+                tokio::task::spawn(async move {
+                    connection.threads_statistics.increase_read_threads();
+                    connection.update_read_thread_status(TcpThreadStatus::Started);
+
+                    handle_new_connection(
+                        read_tcp_stream,
+                        &connection,
+                        read_serializer,
+                        logger_spawned,
+                        socket_callback,
+                    )
+                    .await;
+
+                    connection.threads_statistics.decrease_read_threads();
+                    connection.update_read_thread_status(TcpThreadStatus::Finished);
+                });
 
                 connection_id += 1;
             }
@@ -163,7 +175,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
 
 pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     tcp_stream: ReadHalf<TcpStream>,
-    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
+    connection: &Arc<TcpSocketConnection<TContract, TSerializer>>,
     mut read_serializer: TSerializer,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
@@ -174,19 +186,17 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
 {
     let mut socket_reader = SocketReaderTcpStream::new(tcp_stream);
 
-    let result = super::read::read_first_server_packet(
-        &connection,
-        &mut socket_reader,
-        &mut read_serializer,
-    )
-    .await;
+    let result =
+        super::read::read_first_server_packet(connection, &mut socket_reader, &mut read_serializer)
+            .await;
 
     if result.is_err() {
+        connection.disconnect().await;
         return;
     }
 
     if !crate::tcp_connection::read_loop::execute_on_connected(
-        &connection,
+        connection,
         &socket_callback,
         &logger,
     )
@@ -200,18 +210,14 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
         super::dead_connection_detector::start_server_dead_connection_detector(connection.clone()),
     );
 
-    connection.threads_statistics.increase_read_threads();
-    connection.update_read_thread_status(TcpThreadStatus::Started);
     crate::tcp_connection::read_loop::start(
         socket_reader,
-        connection.clone(),
+        &connection,
         read_serializer,
         &socket_callback,
         logger.clone(),
     )
     .await;
-    connection.threads_statistics.decrease_read_threads();
-    connection.update_read_thread_status(TcpThreadStatus::Finished);
 
     crate::tcp_connection::read_loop::execute_on_disconnected(
         &connection,
