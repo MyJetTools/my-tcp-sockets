@@ -21,7 +21,8 @@ pub async fn read_first_server_packet<
 ) -> Result<(), ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializer:
+        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,

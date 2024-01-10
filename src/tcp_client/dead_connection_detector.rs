@@ -6,7 +6,7 @@ use crate::{tcp_connection::TcpSocketConnection, TcpContract, TcpSocketSerialize
 
 pub async fn start<
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
     TSerializationMetadata: Default + Send + Sync + 'static,
 >(
     connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,

@@ -18,7 +18,8 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializer:
+        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
@@ -66,7 +67,8 @@ async fn read_loop<TContract, TSerializer, TSerializationMetadata, TSocketCallba
 ) -> Result<(), ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializer:
+        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
@@ -97,7 +99,8 @@ pub async fn read_packet<TContract, TSerializer, TSerializationMetadata>(
 ) -> Result<TContract, ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializer:
+        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
     socket_reader.start_calculating_read_size();
@@ -144,7 +147,8 @@ pub async fn execute_on_connected<TContract, TSerializer, TSerializationMetadata
 ) -> bool
 where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializer:
+        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
     TSerializationMetadata: Default + Send + Sync + 'static,
@@ -182,7 +186,8 @@ pub async fn execute_on_disconnected<
     logger: &Arc<dyn Logger + Send + Sync + 'static>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializer:
+        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
     TSerializationMetadata: Default + Send + Sync + 'static,

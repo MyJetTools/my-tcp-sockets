@@ -20,7 +20,7 @@ use super::{
 
 pub struct TcpConnectionInner<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
     TSerializationMetadata: Default + Send + Sync + 'static,
 > {
     pub stream: Mutex<TcpConnectionStream>,
@@ -37,7 +37,7 @@ pub struct TcpConnectionInner<
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
         TSerializationMetadata: Default + Send + Sync + 'static,
     > TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
@@ -96,7 +96,7 @@ impl<
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
-            write_access.serializer = Some(TSerializer::create_serializer());
+            write_access.serializer = Some(TSerializer::default());
         }
 
         let serializer = write_access.serializer.take().unwrap();
@@ -118,7 +118,7 @@ impl<
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
-            write_access.serializer = Some(TSerializer::create_serializer());
+            write_access.serializer = Some(TSerializer::default());
         }
 
         let serializer = write_access.serializer.take().unwrap();
@@ -137,7 +137,7 @@ impl<
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
-            write_access.serializer = Some(TSerializer::create_serializer());
+            write_access.serializer = Some(TSerializer::default());
         }
 
         let serializer = write_access.serializer.take().unwrap();
@@ -240,7 +240,7 @@ impl<
 #[async_trait::async_trait]
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
         TSerializationMetadata: Default + Send + Sync + 'static,
     > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {

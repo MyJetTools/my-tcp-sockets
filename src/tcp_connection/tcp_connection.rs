@@ -52,7 +52,8 @@ pub struct TcpSocketConnection<
     TSerializer,
     TSerializationMetadata,
 > where
-    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializer:
+        Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
     TSerializationMetadata: Default + Send + Sync + 'static,
 {
     pub id: ConnectionId,
@@ -66,7 +67,7 @@ pub struct TcpSocketConnection<
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
         TSerializationMetadata: Default + Send + Sync + 'static,
     > TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {
@@ -197,7 +198,7 @@ impl<
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
         TSerializationMetadata: Default + Send + Sync + 'static,
     > Drop for TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {

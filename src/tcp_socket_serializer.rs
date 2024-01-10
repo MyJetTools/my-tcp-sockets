@@ -25,6 +25,4 @@ pub trait TcpSocketSerializer<
         socket_reader: &mut TSocketReader,
         metadata: &TSerializationMetadata,
     ) -> Result<TContract, ReadingTcpContractFail>;
-
-    fn create_serializer() -> Self;
 }

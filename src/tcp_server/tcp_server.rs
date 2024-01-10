@@ -51,7 +51,11 @@ impl TcpServer {
         app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
-        TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+        TSerializer: Default
+            + Send
+            + Sync
+            + 'static
+            + TcpSocketSerializer<TContract, TSerializationMetadata>,
         TContract: TcpContract + Send + Sync + 'static,
         TSocketCallback: Send
             + Sync
@@ -87,7 +91,8 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
     threads_statistics: Arc<ThreadsStatistics>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializer:
+        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
@@ -176,13 +181,14 @@ pub async fn handle_new_connection<
     socket_callback: Arc<TSocketCallback>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializer:
+        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
 {
     let mut socket_reader = SocketReaderTcpStream::new(tcp_stream);
 
-    let mut read_serializer = TSerializer::create_serializer();
+    let mut read_serializer = TSerializer::default();
 
     let mut serialization_metadata = TSerializationMetadata::default();
 

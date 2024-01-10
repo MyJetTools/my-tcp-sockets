@@ -6,7 +6,7 @@ use crate::{tcp_connection::TcpSocketConnection, TcpSocketSerializer};
 
 pub enum ConnectionEvent<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
     TSerializationMetadata: Default + Send + Sync + 'static,
 > {
     Connected(Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>),
@@ -20,7 +20,7 @@ pub enum ConnectionEvent<
 #[async_trait]
 pub trait SocketEventCallback<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
     TSerializationMetadata: Default + Send + Sync + 'static,
 >
 {
