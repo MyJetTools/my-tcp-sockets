@@ -143,22 +143,30 @@ impl<
 
         result
     }
-    pub async fn send_ping(&self, meta_data: &TSerializationMetadata) -> usize {
+    pub async fn send_ping(&self) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
             write_access.serializer = Some(TSerializer::default());
         }
 
+        if write_access.meta_data.is_none() {
+            write_access.meta_data = Some(TSerializationMetadata::default());
+        }
+
         let serializer = write_access.serializer.take().unwrap();
 
         let ping = serializer.get_ping();
 
+        let meta_data = write_access.meta_data.take().unwrap();
+
         let result = write_access.push_payload(|tcp_buffer_chunk| {
-            serializer.serialize(tcp_buffer_chunk, &ping, meta_data);
+            serializer.serialize(tcp_buffer_chunk, &ping, &meta_data);
         });
 
         write_access.serializer = Some(serializer);
+
+        write_access.meta_data = Some(meta_data);
 
         result
     }

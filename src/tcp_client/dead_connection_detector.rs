@@ -21,8 +21,6 @@ pub async fn start<
 
     connection.threads_statistics.ping_threads.increase();
 
-    let serialization_metadata = TSerializationMetadata::default();
-
     loop {
         tokio::time::sleep(ping_interval).await;
 
@@ -40,7 +38,7 @@ pub async fn start<
         if seconds_remains_to_ping == 0 {
             seconds_remains_to_ping = seconds_to_ping;
             connection.statistics().set_ping_start();
-            connection.send_ping(&serialization_metadata).await;
+            connection.send_ping().await;
         }
 
         let now = DateTimeAsMicroseconds::now();

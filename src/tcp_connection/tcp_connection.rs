@@ -171,12 +171,12 @@ impl<
         write_access.set_connection_name(name);
     }
 
-    pub async fn send_ping(&self, metadata: &TSerializationMetadata) -> usize {
+    pub async fn send_ping(&self) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.send_ping(metadata).await
+        self.inner.send_ping().await
     }
 
     pub fn statistics(&self) -> &super::ConnectionStatistics {
