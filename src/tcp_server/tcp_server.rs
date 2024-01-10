@@ -186,9 +186,13 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
 {
     let mut socket_reader = SocketReaderTcpStream::new(tcp_stream);
 
-    let result =
-        super::read::read_first_server_packet(connection, &mut socket_reader, &mut read_serializer)
-            .await;
+    let result = super::read::read_first_server_packet(
+        connection,
+        &mut socket_reader,
+        &mut read_serializer,
+        &socket_callback,
+    )
+    .await;
 
     if result.is_err() {
         connection.disconnect().await;
@@ -218,6 +222,8 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
         logger.clone(),
     )
     .await;
+
+    connection.disconnect().await;
 
     crate::tcp_connection::read_loop::execute_on_disconnected(
         &connection,

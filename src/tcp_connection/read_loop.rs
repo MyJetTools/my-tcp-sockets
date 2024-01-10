@@ -19,23 +19,37 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
-    let read_result = read_loop(
-        socket_reader,
-        connection.clone(),
-        read_serializer,
-        socket_callback.clone(),
-    )
+    let connection_spawned = connection.clone();
+    let socket_callback = socket_callback.clone();
+
+    let logger_spawned = logger.clone();
+
+    let read_result = tokio::spawn(async move {
+        let read_result = read_loop(
+            socket_reader,
+            connection_spawned.clone(),
+            read_serializer,
+            socket_callback,
+        )
+        .await;
+
+        if let Err(err) = read_result {
+            logger_spawned.write_error(
+                "Socket Read Loop".to_string(),
+                format!("Socket Read loop exited with error: {:?}", err),
+                Some(connection_spawned.get_log_context().await),
+            );
+        }
+    })
     .await;
 
-    if let Err(err) = read_result {
+    if read_result.is_err() {
         logger.write_error(
             "Socket Read Loop".to_string(),
-            format!("Socket Read loop exited with error: {:?}", err),
+            format!("Socket Read loop exited with panic"),
             Some(connection.get_log_context().await),
         );
     }
-
-    connection.disconnect().await;
 }
 
 async fn read_loop<TContract, TSerializer, TSocketCallback>(
