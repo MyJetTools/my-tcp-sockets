@@ -3,7 +3,8 @@ use std::{sync::Arc, time::Duration};
 use crate::{
     socket_reader::{ReadingTcpContractFail, SocketReaderTcpStream},
     tcp_connection::TcpSocketConnection,
-    ConnectionEvent, SerializationMetadata, SocketEventCallback, TcpContract, TcpSocketSerializer,
+    ConnectionEvent, SocketEventCallback, TcpContract, TcpSerializationMetadata,
+    TcpSocketSerializer,
 };
 
 pub async fn read_first_server_packet<
@@ -23,7 +24,7 @@ where
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
     let first_packet_reading = crate::tcp_connection::read_loop::read_packet(
         &connection,

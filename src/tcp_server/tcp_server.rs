@@ -9,7 +9,7 @@ use tokio::{
 use crate::{
     socket_reader::SocketReaderTcpStream,
     tcp_connection::{TcpSocketConnection, TcpThreadStatus},
-    ConnectionId, SerializationMetadata, SocketEventCallback, TcpContract, TcpSocketSerializer,
+    ConnectionId, SocketEventCallback, TcpContract, TcpSerializationMetadata, TcpSocketSerializer,
     ThreadsStatistics,
 };
 
@@ -57,7 +57,8 @@ impl TcpServer {
             + Sync
             + 'static
             + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-        TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+        TSerializationMetadata:
+            Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
     {
         let threads_statistics = self.threads_statistics.clone();
         tokio::spawn(accept_sockets_loop(
@@ -89,7 +90,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
     while !app_states.is_initialized() {
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -167,7 +168,7 @@ pub async fn handle_new_connection<
     TContract,
     TSerializer,
     TSocketCallback,
-    TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 >(
     tcp_stream: ReadHalf<TcpStream>,
     connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,

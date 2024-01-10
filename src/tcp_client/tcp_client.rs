@@ -12,7 +12,7 @@ use crate::tcp_connection::TcpThreadStatus;
 use crate::{
     tcp_connection::TcpSocketConnection, ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
-use crate::{SerializationMetadata, TcpClientSocketSettings, TcpContract, ThreadsStatistics};
+use crate::{TcpClientSocketSettings, TcpContract, TcpSerializationMetadata, ThreadsStatistics};
 
 const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
 const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
@@ -73,7 +73,7 @@ impl TcpClient {
         TContract,
         TSerializer,
         TSocketCallback,
-        TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+        TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
     >(
         &self,
         socket_callback: Arc<TSocketCallback>,
@@ -132,7 +132,7 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
     let mut connection_id: ConnectionId = 0;
 
@@ -237,7 +237,7 @@ pub async fn handle_new_connection<
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
     if !crate::tcp_connection::read_loop::execute_on_connected(
         &connection,

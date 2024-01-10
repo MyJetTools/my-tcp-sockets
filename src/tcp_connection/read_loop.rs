@@ -5,7 +5,8 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 use crate::{
     socket_reader::{ReadingTcpContractFail, SocketReaderTcpStream},
     tcp_connection::TcpSocketConnection,
-    ConnectionEvent, SerializationMetadata, SocketEventCallback, TcpContract, TcpSocketSerializer,
+    ConnectionEvent, SocketEventCallback, TcpContract, TcpSerializationMetadata,
+    TcpSocketSerializer,
 };
 
 pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallback>(
@@ -20,7 +21,7 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
     let connection_spawned = connection.clone();
     let socket_callback = socket_callback.clone();
@@ -68,7 +69,7 @@ where
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
     loop {
         let contract = read_packet(
@@ -97,7 +98,7 @@ pub async fn read_packet<TContract, TSerializer, TSerializationMetadata>(
 where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
-    TSerializationMetadata: Default + SerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
     socket_reader.start_calculating_read_size();
 
