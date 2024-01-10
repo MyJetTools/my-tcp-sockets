@@ -7,6 +7,7 @@ pub enum ReadingTcpContractFail {
     InvalidPacketId(u8),
     ParsingUtf8StringError(FromUtf8Error),
     IoError(Error),
+    Timeout,
 }
 
 impl From<Error> for ReadingTcpContractFail {

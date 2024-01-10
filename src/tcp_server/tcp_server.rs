@@ -7,6 +7,7 @@ use tokio::{
 };
 
 use crate::{
+    socket_reader::SocketReaderTcpStream,
     tcp_connection::{TcpSocketConnection, TcpThreadStatus},
     ConnectionId, SocketEventCallback, TcpContract, TcpSocketSerializer, ThreadsStatistics,
 };
@@ -161,9 +162,9 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
 }
 
 pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
-    read_socket: ReadHalf<TcpStream>,
+    tcp_stream: ReadHalf<TcpStream>,
     connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
-    read_serializer: TSerializer,
+    mut read_serializer: TSerializer,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
 ) where
@@ -171,6 +172,30 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
     TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
+    let mut socket_reader = SocketReaderTcpStream::new(tcp_stream);
+
+    let result = super::read::read_first_server_packet(
+        &connection,
+        &mut socket_reader,
+        &mut read_serializer,
+    )
+    .await;
+
+    if result.is_err() {
+        return;
+    }
+
+    if !crate::tcp_connection::read_loop::execute_on_connected(
+        &connection,
+        &socket_callback,
+        &logger,
+    )
+    .await
+    {
+        connection.disconnect().await;
+        return;
+    }
+
     tokio::spawn(
         super::dead_connection_detector::start_server_dead_connection_detector(connection.clone()),
     );
@@ -178,13 +203,20 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     connection.threads_statistics.increase_read_threads();
     connection.update_read_thread_status(TcpThreadStatus::Started);
     crate::tcp_connection::read_loop::start(
-        read_socket,
+        socket_reader,
         connection.clone(),
         read_serializer,
-        socket_callback,
+        &socket_callback,
         logger.clone(),
     )
     .await;
     connection.threads_statistics.decrease_read_threads();
     connection.update_read_thread_status(TcpThreadStatus::Finished);
+
+    crate::tcp_connection::read_loop::execute_on_disconnected(
+        &connection,
+        &socket_callback,
+        &logger,
+    )
+    .await;
 }
