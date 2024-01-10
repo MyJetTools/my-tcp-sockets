@@ -8,19 +8,22 @@ use super::{TcpBufferChunk, TcpBufferToSend, TcpConnectionStates};
 
 pub struct BufferToSendWrapper<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: Default + Send + Sync + 'static,
 > {
     pub buffer_to_send: Option<TcpBufferToSend>,
     pub events_loop: Option<EventsLoop<()>>,
     pub events_loop_is_started: bool,
     pub serializer: Option<TSerializer>,
     phantom_contract: std::marker::PhantomData<TContract>,
+    phantom_metadata: std::marker::PhantomData<TSerializationMetadata>,
 }
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
-    > BufferToSendWrapper<TContract, TSerializer>
+        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializationMetadata: Default + Send + Sync + 'static,
+    > BufferToSendWrapper<TContract, TSerializer, TSerializationMetadata>
 {
     pub fn new(reusable_send_buffer_size: usize) -> Self {
         Self {
@@ -29,6 +32,7 @@ impl<
             events_loop_is_started: false,
             serializer: None,
             phantom_contract: std::marker::PhantomData,
+            phantom_metadata: std::marker::PhantomData,
         }
     }
 

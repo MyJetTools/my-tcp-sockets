@@ -6,9 +6,10 @@ use crate::{tcp_connection::TcpSocketConnection, TcpSocketSerializer};
 
 pub async fn start_server_dead_connection_detector<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: Default + Send + Sync + 'static,
 >(
-    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
+    connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
 ) {
     connection.threads_statistics.ping_threads.increase();
     let sleep_duration = tokio::time::Duration::from_secs(5);

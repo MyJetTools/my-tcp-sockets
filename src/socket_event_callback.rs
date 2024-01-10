@@ -6,12 +6,13 @@ use crate::{tcp_connection::TcpSocketConnection, TcpSocketSerializer};
 
 pub enum ConnectionEvent<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: Default + Send + Sync + 'static,
 > {
-    Connected(Arc<TcpSocketConnection<TContract, TSerializer>>),
-    Disconnected(Arc<TcpSocketConnection<TContract, TSerializer>>),
+    Connected(Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>),
+    Disconnected(Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>),
     Payload {
-        connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
+        connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
         payload: TContract,
     },
 }
@@ -19,8 +20,12 @@ pub enum ConnectionEvent<
 #[async_trait]
 pub trait SocketEventCallback<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: Default + Send + Sync + 'static,
 >
 {
-    async fn handle(&self, connection_event: ConnectionEvent<TContract, TSerializer>);
+    async fn handle(
+        &self,
+        connection_event: ConnectionEvent<TContract, TSerializer, TSerializationMetadata>,
+    );
 }

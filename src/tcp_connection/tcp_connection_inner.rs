@@ -20,10 +20,12 @@ use super::{
 
 pub struct TcpConnectionInner<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: Default + Send + Sync + 'static,
 > {
     pub stream: Mutex<TcpConnectionStream>,
-    pub buffer_to_send_inner: Mutex<BufferToSendWrapper<TContract, TSerializer>>,
+    pub buffer_to_send_inner:
+        Mutex<BufferToSendWrapper<TContract, TSerializer, TSerializationMetadata>>,
     max_send_payload_size: usize,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
@@ -35,8 +37,9 @@ pub struct TcpConnectionInner<
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
-    > TcpConnectionInner<TContract, TSerializer>
+        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializationMetadata: Default + Send + Sync + 'static,
+    > TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
     pub fn new(
         stream: TcpConnectionStream,
@@ -85,7 +88,11 @@ impl<
         write_access.events_loop = Some(send_to_socket_event_loop);
     }
 
-    pub async fn push_contract(&self, contract: &TContract) -> usize {
+    pub async fn push_contract(
+        &self,
+        contract: &TContract,
+        meta_data: &TSerializationMetadata,
+    ) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
@@ -95,7 +102,7 @@ impl<
         let serializer = write_access.serializer.take().unwrap();
 
         let result = write_access.push_payload(|tcp_buffer_chunk| {
-            serializer.serialize(tcp_buffer_chunk, contract);
+            serializer.serialize(tcp_buffer_chunk, contract, meta_data);
         });
 
         write_access.serializer = Some(serializer);
@@ -103,7 +110,11 @@ impl<
         result
     }
 
-    pub async fn push_many_contracts(&self, contracts: &[TContract]) -> usize {
+    pub async fn push_many_contracts(
+        &self,
+        contracts: &[TContract],
+        meta_data: &TSerializationMetadata,
+    ) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
@@ -114,7 +125,7 @@ impl<
 
         let result = write_access.push_payload(|tcp_buffer_chunk| {
             for contract in contracts {
-                serializer.serialize(tcp_buffer_chunk, contract);
+                serializer.serialize(tcp_buffer_chunk, contract, meta_data);
             }
         });
 
@@ -122,7 +133,7 @@ impl<
 
         result
     }
-    pub async fn send_ping(&self) -> usize {
+    pub async fn send_ping(&self, meta_data: &TSerializationMetadata) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
         if write_access.serializer.is_none() {
@@ -134,7 +145,7 @@ impl<
         let ping = serializer.get_ping();
 
         let result = write_access.push_payload(|tcp_buffer_chunk| {
-            serializer.serialize(tcp_buffer_chunk, &ping);
+            serializer.serialize(tcp_buffer_chunk, &ping, meta_data);
         });
 
         write_access.serializer = Some(serializer);
@@ -229,8 +240,9 @@ impl<
 #[async_trait::async_trait]
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
-    > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer>
+        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializationMetadata: Default + Send + Sync + 'static,
+    > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
     async fn started(&self) {
         //println!("EventsLoop started: {:?}", self.get_log_context().await);

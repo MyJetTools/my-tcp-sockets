@@ -47,12 +47,16 @@ impl Into<TcpThreadStatus> for i32 {
     }
 }
 
-pub struct TcpSocketConnection<TContract: Send + Sync + 'static, TSerializer>
-where
-    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+pub struct TcpSocketConnection<
+    TContract: Send + Sync + 'static,
+    TSerializer,
+    TSerializationMetadata,
+> where
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: Default + Send + Sync + 'static,
 {
     pub id: ConnectionId,
-    inner: Arc<TcpConnectionInner<TContract, TSerializer>>,
+    inner: Arc<TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>>,
 
     pub addr: Option<SocketAddr>,
     pub dead_disconnect_timeout: Duration,
@@ -62,8 +66,9 @@ where
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
-    > TcpSocketConnection<TContract, TSerializer>
+        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializationMetadata: Default + Send + Sync + 'static,
+    > TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {
     pub async fn new(
         master_socket_name: Arc<String>,
@@ -136,20 +141,24 @@ impl<
         self.inner.get_write_thread_status()
     }
 
-    pub async fn send(&self, contract: &TContract) -> usize {
+    pub async fn send(&self, contract: &TContract, metadata: &TSerializationMetadata) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.push_contract(contract).await
+        self.inner.push_contract(contract, metadata).await
     }
 
-    pub async fn send_many(&self, contracts: &[TContract]) -> usize {
+    pub async fn send_many(
+        &self,
+        contracts: &[TContract],
+        metadata: &TSerializationMetadata,
+    ) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.push_many_contracts(contracts).await
+        self.inner.push_many_contracts(contracts, metadata).await
     }
 
     pub async fn send_bytes(&self, payload: &[u8]) -> usize {
@@ -165,12 +174,12 @@ impl<
         write_access.set_connection_name(name);
     }
 
-    pub async fn send_ping(&self) -> usize {
+    pub async fn send_ping(&self, metadata: &TSerializationMetadata) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.send_ping().await
+        self.inner.send_ping(metadata).await
     }
 
     pub fn statistics(&self) -> &super::ConnectionStatistics {
@@ -188,8 +197,9 @@ impl<
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
-    > Drop for TcpSocketConnection<TContract, TSerializer>
+        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializationMetadata: Default + Send + Sync + 'static,
+    > Drop for TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {
     fn drop(&mut self) {
         self.threads_statistics.connections_objects.decrease();

@@ -6,14 +6,24 @@ use crate::{
 };
 
 #[async_trait]
-pub trait TcpSocketSerializer<TContract: Send + Sync + 'static> {
-    fn serialize(&self, out: &mut impl TcpWriteBuffer, contract: &TContract);
+pub trait TcpSocketSerializer<
+    TContract: Send + Sync + 'static,
+    TSerializationMetadata: Default + Send + Sync + 'static,
+>
+{
+    fn serialize(
+        &self,
+        out: &mut impl TcpWriteBuffer,
+        contract: &TContract,
+        metadata: &TSerializationMetadata,
+    );
 
     fn get_ping(&self) -> TContract;
 
     async fn deserialize<TSocketReader: Send + Sync + 'static + SocketReader>(
         &mut self,
         socket_reader: &mut TSocketReader,
+        metadata: &TSerializationMetadata,
     ) -> Result<TContract, ReadingTcpContractFail>;
 
     fn create_serializer() -> Self;

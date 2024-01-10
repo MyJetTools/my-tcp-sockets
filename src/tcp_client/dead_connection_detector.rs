@@ -6,9 +6,10 @@ use crate::{tcp_connection::TcpSocketConnection, TcpContract, TcpSocketSerialize
 
 pub async fn start<
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: Default + Send + Sync + 'static,
 >(
-    connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
+    connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     seconds_to_ping: usize,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) {
@@ -17,6 +18,8 @@ pub async fn start<
     let mut seconds_remains_to_ping = seconds_to_ping;
 
     connection.threads_statistics.ping_threads.increase();
+
+    let serialization_metadata = TSerializationMetadata::default();
 
     loop {
         tokio::time::sleep(ping_interval).await;
@@ -35,7 +38,7 @@ pub async fn start<
         if seconds_remains_to_ping == 0 {
             seconds_remains_to_ping = seconds_to_ping;
             connection.statistics().set_ping_start();
-            connection.send_ping().await;
+            connection.send_ping(&serialization_metadata).await;
         }
 
         let now = DateTimeAsMicroseconds::now();
