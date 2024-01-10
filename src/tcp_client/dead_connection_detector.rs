@@ -16,7 +16,7 @@ pub async fn start<
 
     let mut seconds_remains_to_ping = seconds_to_ping;
 
-    connection.threads_statistics.increase_ping_threads();
+    connection.threads_statistics.ping_threads.increase();
 
     loop {
         tokio::time::sleep(ping_interval).await;
@@ -52,5 +52,5 @@ pub async fn start<
         }
     }
 
-    connection.threads_statistics.decrease_ping_threads();
+    connection.threads_statistics.ping_threads.decrease();
 }

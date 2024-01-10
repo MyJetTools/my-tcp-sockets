@@ -164,7 +164,7 @@ impl EventsLoopTick<()> for TcpConnectionInner {
         //println!("EventsLoop started: {:?}", self.get_log_context().await);
 
         self.update_write_thread_status(TcpThreadStatus::Started);
-        self.threads_statistics.increase_write_threads();
+        self.threads_statistics.write_threads.increase();
     }
 
     async fn tick(&self, _: ()) {
@@ -174,6 +174,6 @@ impl EventsLoopTick<()> for TcpConnectionInner {
     async fn finished(&self) {
         // println!("EventsLoop finished: {:?}", self.get_log_context().await);
         self.update_write_thread_status(TcpThreadStatus::Finished);
-        self.threads_statistics.decrease_write_threads();
+        self.threads_statistics.write_threads.decrease();
     }
 }

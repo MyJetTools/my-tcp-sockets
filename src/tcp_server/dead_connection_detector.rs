@@ -10,7 +10,7 @@ pub async fn start_server_dead_connection_detector<
 >(
     connection: Arc<TcpSocketConnection<TContract, TSerializer>>,
 ) {
-    connection.threads_statistics.increase_ping_threads();
+    connection.threads_statistics.ping_threads.increase();
     let sleep_duration = tokio::time::Duration::from_secs(5);
 
     loop {
@@ -48,5 +48,5 @@ pub async fn start_server_dead_connection_detector<
         }
     }
 
-    connection.threads_statistics.decrease_ping_threads();
+    connection.threads_statistics.ping_threads.decrease();
 }

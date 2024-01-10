@@ -256,7 +256,7 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
 
     let socket_reader = SocketReaderTcpStream::new(tcp_stream);
 
-    connection.threads_statistics.increase_read_threads();
+    connection.threads_statistics.read_threads.increase();
     connection.update_read_thread_status(TcpThreadStatus::Started);
     crate::tcp_connection::read_loop::start(
         socket_reader,
@@ -267,7 +267,7 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback>(
     )
     .await;
     connection.update_read_thread_status(TcpThreadStatus::Finished);
-    connection.threads_statistics.decrease_read_threads();
+    connection.threads_statistics.read_threads.decrease();
 
     crate::tcp_connection::read_loop::execute_on_disconnected(
         &connection,

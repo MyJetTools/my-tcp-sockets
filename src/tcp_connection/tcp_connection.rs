@@ -87,6 +87,8 @@ impl<
         let connection_stream =
             TcpConnectionStream::new(socket, logger.clone(), log_context, send_timeout);
 
+        threads_statistics.connections_objects.increase();
+
         let inner = Arc::new(TcpConnectionInner::new(
             connection_stream,
             max_send_payload_size,
@@ -203,5 +205,15 @@ impl<
             .as_positive_or_zero();
 
         silence_duration > self.dead_disconnect_timeout
+    }
+}
+
+impl<
+        TContract: Send + Sync + 'static,
+        TSerializer: TcpSocketSerializer<TContract> + Send + Sync + 'static,
+    > Drop for TcpSocketConnection<TContract, TSerializer>
+{
+    fn drop(&mut self) {
+        self.threads_statistics.connections_objects.decrease();
     }
 }

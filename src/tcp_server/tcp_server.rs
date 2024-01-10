@@ -146,7 +146,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                 let socket_callback = socket_callback.clone();
                 let read_serializer = serializer_factory();
                 tokio::task::spawn(async move {
-                    connection.threads_statistics.increase_read_threads();
+                    connection.threads_statistics.read_threads.increase();
                     connection.update_read_thread_status(TcpThreadStatus::Started);
 
                     handle_new_connection(
@@ -158,7 +158,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     )
                     .await;
 
-                    connection.threads_statistics.decrease_read_threads();
+                    connection.threads_statistics.read_threads.increase();
                     connection.update_read_thread_status(TcpThreadStatus::Finished);
                 });
 
