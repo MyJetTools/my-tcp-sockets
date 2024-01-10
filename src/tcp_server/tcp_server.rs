@@ -158,7 +158,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSerializeFactory, TSocketC
                     )
                     .await;
 
-                    connection.threads_statistics.read_threads.increase();
+                    connection.threads_statistics.read_threads.decrease();
                     connection.update_read_thread_status(TcpThreadStatus::Finished);
                 });
 
