@@ -81,7 +81,6 @@ impl<
         send_timeout: Duration,
         dead_disconnect_timeout: Duration,
         threads_statistics: Arc<crate::ThreadsStatistics>,
-        reusable_send_buffer_size: usize,
     ) -> Self {
         let mut send_to_socket_event_loop = EventsLoop::new(
             format!("TcpConnection {}.{}", master_socket_name.as_str(), id),
@@ -97,7 +96,6 @@ impl<
         let inner = Arc::new(TcpConnectionInner::new(
             connection_stream,
             max_send_payload_size,
-            reusable_send_buffer_size,
             logger.clone(),
             threads_statistics.clone(),
         ));

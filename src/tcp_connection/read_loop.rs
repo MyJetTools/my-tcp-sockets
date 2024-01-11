@@ -99,7 +99,7 @@ where
 }
 
 pub async fn read_packet<TContract, TSerializer, TSerializationMetadata>(
-    connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
+    connection: &TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>,
     socket_reader: &mut SocketReaderTcpStream,
     read_serializer: &mut TSerializer,
     meta_data: &mut TSerializationMetadata,
@@ -124,7 +124,7 @@ where
         );
 
         connection.disconnect().await;
-        return Err(ReadingTcpContractFail::SocketDisconnected);
+        return Err(ReadingTcpContractFail::Timeout);
     }
 
     let contract = read_result.unwrap()?;

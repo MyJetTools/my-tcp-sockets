@@ -1,8 +1,10 @@
 use crate::TcpWriteBuffer;
 
+use super::BufferInStack;
+
 pub struct TcpBufferChunk {
     pub reusable_data_is_sent: bool,
-    pub reusable_buffer: Vec<u8>,
+    pub reusable_buffer: BufferInStack,
     pub pos_to_send: usize,
     pub additional_buffer: Vec<u8>,
     #[cfg(test)]
@@ -10,9 +12,10 @@ pub struct TcpBufferChunk {
 }
 
 impl TcpBufferChunk {
-    pub fn new(max_size: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            reusable_buffer: Vec::with_capacity(max_size),
+            reusable_buffer: BufferInStack::new(),
+
             reusable_data_is_sent: false,
             pos_to_send: 0,
             additional_buffer: Vec::new(),
@@ -22,53 +25,21 @@ impl TcpBufferChunk {
     }
 
     pub fn push_byte(&mut self, b: u8) {
-        let reusable_buffer_capacity = self.reusable_buffer.capacity();
-        if self.reusable_buffer.len() == reusable_buffer_capacity {
+        if !self.reusable_buffer.push_byte(b) {
             self.additional_buffer.push(b);
-            return;
         }
-
-        let size_after = self.reusable_buffer.len() + 1;
-        if size_after <= reusable_buffer_capacity {
-            self.reusable_buffer.push(b);
-            return;
-        }
-
-        self.reusable_buffer.push(b);
     }
 
     pub fn push_slice<'s>(&mut self, new_data: &'s [u8]) {
-        let reusable_buffer_capacity = self.reusable_buffer.capacity();
-        if self.reusable_buffer.len() == reusable_buffer_capacity {
-            self.additional_buffer.extend_from_slice(new_data);
-            return;
+        let remaining = self.reusable_buffer.push_as_much_as_possible(new_data);
+
+        if let Some(remaining) = remaining {
+            self.additional_buffer.extend_from_slice(remaining);
         }
-
-        let size_after = self.reusable_buffer.len() + new_data.len();
-        if size_after <= reusable_buffer_capacity {
-            self.reusable_buffer.extend_from_slice(new_data);
-            return;
-        }
-
-        let size_to_upload = self.reusable_buffer.capacity() - self.reusable_buffer.len();
-
-        self.reusable_buffer
-            .extend_from_slice(&new_data[..size_to_upload]);
-
-        self.additional_buffer
-            .extend_from_slice(&new_data[size_to_upload..]);
-    }
-
-    pub fn has_buffer_to_fill(&self) -> bool {
-        self.reusable_buffer.len() < self.reusable_buffer.capacity()
     }
 
     pub fn len(&self) -> usize {
         self.reusable_buffer.len() + self.additional_buffer.len()
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.reusable_buffer.capacity()
     }
 
     pub fn reset(&mut self) {
@@ -120,14 +91,19 @@ mod tests {
 
     #[test]
     fn test_overload() {
-        let mut chunk = super::TcpBufferChunk::new(5);
+        let mut chunk = super::TcpBufferChunk::new();
 
-        let data_to_add = vec![0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8];
+        let data_to_add = vec![
+            0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8,
+        ];
 
         chunk.push_slice(&data_to_add);
 
-        assert_eq!(chunk.reusable_buffer.as_slice(), &[0u8, 1u8, 2u8, 3u8, 4u8]);
+        assert_eq!(
+            chunk.reusable_buffer.as_slice(),
+            &[0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8]
+        );
 
-        assert_eq!(chunk.additional_buffer, &[5u8, 6u8, 7u8, 8u8, 9u8]);
+        assert_eq!(chunk.additional_buffer, &[10u8, 11u8, 12u8]);
     }
 }

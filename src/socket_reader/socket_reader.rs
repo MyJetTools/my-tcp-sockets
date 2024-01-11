@@ -140,6 +140,7 @@ impl SocketReader for SocketReaderTcpStream {
                     if size == 0 {
                         return Err(ReadingTcpContractFail::SocketDisconnected);
                     }
+                    self.read_size += size;
 
                     read_buffer.commit_written_size(size);
 

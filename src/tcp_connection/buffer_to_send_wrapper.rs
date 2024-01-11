@@ -25,9 +25,9 @@ impl<
         TSerializationMetadata: Default + Send + Sync + 'static,
     > BufferToSendWrapper<TContract, TSerializer, TSerializationMetadata>
 {
-    pub fn new(reusable_send_buffer_size: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            buffer_to_send: Some(TcpBufferToSend::new(reusable_send_buffer_size)),
+            buffer_to_send: Some(TcpBufferToSend::new()),
             events_loop: None,
             events_loop_is_started: false,
             serializer: None,

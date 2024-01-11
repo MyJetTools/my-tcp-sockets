@@ -4,21 +4,18 @@ use super::TcpBufferChunk;
 
 pub struct TcpBufferToSend {
     pub payloads: VecDequeAutoShrink<TcpBufferChunk>,
-    reusable_buffer_size: usize,
 }
 
 impl TcpBufferToSend {
-    pub fn new(reusable_buffer_size: usize) -> Self {
+    pub fn new() -> Self {
         Self {
             payloads: VecDequeAutoShrink::new(16),
-            reusable_buffer_size,
         }
     }
 
     fn get_payload_to_append(&mut self) -> &mut TcpBufferChunk {
         if self.payloads.is_empty() {
-            self.payloads
-                .push_back(TcpBufferChunk::new(self.reusable_buffer_size));
+            self.payloads.push_back(TcpBufferChunk::new());
         }
 
         self.payloads.get_mut(0).unwrap()
@@ -70,7 +67,7 @@ mod test {
 
     #[test]
     fn test_less_amount_than_buffer() {
-        let mut tcp_payloads = TcpBufferToSend::new(10);
+        let mut tcp_payloads = TcpBufferToSend::new();
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5]);
 
@@ -98,7 +95,7 @@ mod test {
 
     #[test]
     fn test_less_amount_exactly_as_buffer() {
-        let mut tcp_payloads = TcpBufferToSend::new(10);
+        let mut tcp_payloads = TcpBufferToSend::new();
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
@@ -116,7 +113,7 @@ mod test {
 
     #[test]
     fn test_amount_bugger_than_reusable_buffer() {
-        let mut tcp_payloads = TcpBufferToSend::new(10);
+        let mut tcp_payloads = TcpBufferToSend::new();
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 
@@ -134,7 +131,7 @@ mod test {
 
     #[test]
     fn test_we_add_to_the_same_chunk() {
-        let mut tcp_payloads = TcpBufferToSend::new(10);
+        let mut tcp_payloads = TcpBufferToSend::new();
 
         tcp_payloads.add_payload(&[1, 2, 3, 4]);
 

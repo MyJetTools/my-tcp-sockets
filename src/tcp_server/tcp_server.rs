@@ -23,7 +23,6 @@ pub struct TcpServer {
     name: Arc<String>,
     max_send_payload_size: usize,
     send_timeout: Duration,
-    reusable_send_buffer_size: usize,
     pub threads_statistics: Arc<ThreadsStatistics>,
 }
 
@@ -35,13 +34,7 @@ impl TcpServer {
             max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
             send_timeout: DEFAULT_SEND_TIMEOUT,
             threads_statistics: Arc::new(ThreadsStatistics::new()),
-            reusable_send_buffer_size: 65535,
         }
-    }
-
-    pub fn set_reusable_send_buffer_size(mut self, reusable_send_buffer_size: usize) -> Self {
-        self.reusable_send_buffer_size = reusable_send_buffer_size;
-        self
     }
 
     pub async fn start<TContract, TSerializer, TSocketCallback, TSerializationMetadata>(
@@ -70,7 +63,6 @@ impl TcpServer {
             socket_callback.clone(),
             self.name.clone(),
             self.max_send_payload_size,
-            self.reusable_send_buffer_size,
             self.send_timeout,
             app_states,
             logger,
@@ -84,7 +76,6 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
     socket_callback: Arc<TSocketCallback>,
     context_name: Arc<String>,
     max_send_payload_size: usize,
-    reusable_send_buffer_size: usize,
     send_timeout: Duration,
     app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
@@ -124,38 +115,35 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
                 //log_context.insert("Id".to_string(), connection_id.to_string());
                 //log_context.insert("ServerSocketName".to_string(), context_name.to_string());
 
-                let connection = Arc::new(
-                    TcpSocketConnection::new(
-                        context_name.clone(),
-                        write_socket,
-                        connection_id,
-                        Some(socket_addr),
-                        logger.clone(),
-                        max_send_payload_size,
-                        send_timeout,
-                        Duration::from_secs(20),
-                        threads_statistics.clone(),
-                        reusable_send_buffer_size,
-                    )
-                    .await,
-                );
+                let connection = TcpSocketConnection::new(
+                    context_name.clone(),
+                    write_socket,
+                    connection_id,
+                    Some(socket_addr),
+                    logger.clone(),
+                    max_send_payload_size,
+                    send_timeout,
+                    Duration::from_secs(20),
+                    threads_statistics.clone(),
+                )
+                .await;
 
                 let logger_spawned = logger.clone();
                 let socket_callback = socket_callback.clone();
                 tokio::task::spawn(async move {
-                    connection.threads_statistics.read_threads.increase();
+                    let threads_statistics = connection.threads_statistics.clone();
+                    threads_statistics.read_threads.increase();
                     connection.update_read_thread_status(TcpThreadStatus::Started);
 
                     handle_new_connection(
                         read_tcp_stream,
-                        &connection,
+                        connection,
                         logger_spawned,
                         socket_callback,
                     )
                     .await;
 
-                    connection.threads_statistics.read_threads.decrease();
-                    connection.update_read_thread_status(TcpThreadStatus::Finished);
+                    threads_statistics.read_threads.decrease();
                 });
 
                 connection_id += 1;
@@ -176,7 +164,7 @@ pub async fn handle_new_connection<
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 >(
     tcp_stream: ReadHalf<TcpStream>,
-    connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
+    connection: TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
 ) where
@@ -193,27 +181,41 @@ pub async fn handle_new_connection<
     let mut serialization_metadata = TSerializationMetadata::default();
 
     let result = super::read::read_first_server_packet(
-        connection,
+        &connection,
         &mut socket_reader,
         &mut read_serializer,
-        &socket_callback,
         &mut serialization_metadata,
     )
     .await;
 
     if result.is_err() {
         connection.disconnect().await;
+        connection.update_read_thread_status(TcpThreadStatus::Finished);
         return;
     }
 
+    let contract = result.unwrap();
+
+    let connection = Arc::new(connection);
+
+    let socket_callback = socket_callback.clone();
+    let connection = connection.clone();
+
     if !crate::tcp_connection::read_loop::execute_on_connected(
-        connection,
+        &connection,
         &socket_callback,
         &logger,
     )
     .await
     {
         connection.disconnect().await;
+        connection.update_read_thread_status(TcpThreadStatus::Finished);
+        return;
+    }
+
+    if !super::read::callback_payload(&socket_callback, &connection, contract).await {
+        connection.disconnect().await;
+        connection.update_read_thread_status(TcpThreadStatus::Finished);
         return;
     }
 
@@ -239,4 +241,6 @@ pub async fn handle_new_connection<
         &logger,
     )
     .await;
+
+    connection.update_read_thread_status(TcpThreadStatus::Finished);
 }

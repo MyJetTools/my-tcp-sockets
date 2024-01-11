@@ -44,13 +44,12 @@ impl<
     pub fn new(
         stream: TcpConnectionStream,
         max_send_payload_size: usize,
-        reusable_send_buffer_size: usize,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         threads_statistics: Arc<crate::ThreadsStatistics>,
     ) -> Self {
         Self {
             stream: Mutex::new(stream),
-            buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new(reusable_send_buffer_size)),
+            buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new()),
             max_send_payload_size,
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),

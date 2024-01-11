@@ -25,7 +25,6 @@ pub struct TcpClient {
     name: Arc<String>,
     max_send_payload_size: usize,
     send_timeout: Duration,
-    reusable_send_buffer_size: usize,
     background_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     pub threads_statistics: Arc<ThreadsStatistics>,
 }
@@ -45,13 +44,7 @@ impl TcpClient {
             send_timeout: DEFAULT_SEND_TIMEOUT,
             background_task: Mutex::new(None),
             threads_statistics: Arc::new(ThreadsStatistics::new()),
-            reusable_send_buffer_size: 65535 * 2,
         }
-    }
-
-    pub fn set_reusable_send_buffer_size(mut self, reusable_send_buffer_size: usize) -> Self {
-        self.reusable_send_buffer_size = reusable_send_buffer_size;
-        self
     }
 
     pub fn set_seconds_to_ping(mut self, seconds_to_ping: usize) -> Self {
@@ -103,7 +96,6 @@ impl TcpClient {
             self.send_timeout,
             logger,
             threads_statistics,
-            self.reusable_send_buffer_size,
         ));
 
         let mut background_task = self.background_task.lock().await;
@@ -130,7 +122,6 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
     send_timeout: Duration,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     threads_statistics: Arc<ThreadsStatistics>,
-    reusable_send_buffer_size: usize,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
@@ -194,7 +185,6 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
                         send_timeout,
                         disconnect_timeout,
                         threads_statistics.clone(),
-                        reusable_send_buffer_size,
                     )
                     .await,
                 );
