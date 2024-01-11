@@ -42,7 +42,7 @@ where
 
     let contract = response.unwrap()?;
 
-    if !TSerializationMetadata::THERE_IS_METADATA {
+    if meta_data.is_tcp_contract_related_to_metadata(&contract) {
         meta_data.apply_tcp_contract(&contract);
         connection
             .apply_incoming_packet_to_metadata(&contract)
