@@ -103,16 +103,11 @@ impl SocketReader for SocketReaderTcpStream {
     }
 
     async fn read_byte(&mut self) -> Result<u8, ReadingTcpContractFail> {
-        let mut buf = [0u8];
-        let read = self.tcp_stream.read(&mut buf).await?;
-
-        if read == 0 {
-            return Err(ReadingTcpContractFail::SocketDisconnected);
-        }
+        let read = self.tcp_stream.read_u8().await?;
 
         self.read_size += 1;
 
-        return Ok(buf[0]);
+        return Ok(read);
     }
 
     async fn read_until_end_marker<'s>(
