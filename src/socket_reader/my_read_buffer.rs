@@ -1,4 +1,4 @@
-const READ_BUFFER_SIZE: usize = 16384;
+const READ_BUFFER_SIZE: usize = 1024 * 8;
 
 pub struct MyReadBuffer {
     data: [u8; READ_BUFFER_SIZE],
