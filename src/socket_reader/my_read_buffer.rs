@@ -54,7 +54,7 @@ impl MyReadBuffer {
             data_len
         };
 
-        target[..result].copy_from_slice(&self.data[self.start_pos..result]);
+        target[..result].copy_from_slice(&self.data[self.start_pos..self.start_pos + result]);
 
         self.start_pos += result;
         self.fix_start_pos_if_possible();
