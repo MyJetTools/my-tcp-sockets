@@ -176,7 +176,7 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
                 let connection = Arc::new(
                     TcpSocketConnection::new(
                         master_socket_name.clone(),
-                        write_socket,
+                        Some(write_socket),
                         connection_id,
                         None,
                         logger.clone(),
@@ -252,7 +252,7 @@ pub async fn handle_new_connection<
 
     let read_serializer = TSerializer::default();
 
-    let socket_reader = SocketReaderTcpStream::new(tcp_stream);
+    let socket_reader = SocketReaderTcpStream::new_as_owned_tcp_stream(tcp_stream);
 
     let meta_data = TSerializationMetadata::default();
 

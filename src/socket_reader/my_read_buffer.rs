@@ -23,7 +23,7 @@ impl MyReadBuffer {
         self.data_len += size;
     }
 
-    fn fix_start_pos_if_possible(&mut self) {
+    fn discard_buffer_if_possible(&mut self) {
         if self.start_pos == self.data_len {
             self.start_pos = 0;
             self.data_len = 0;
@@ -39,7 +39,7 @@ impl MyReadBuffer {
 
         self.start_pos += 1;
 
-        self.fix_start_pos_if_possible();
+        self.discard_buffer_if_possible();
 
         Some(result)
     }
@@ -59,7 +59,7 @@ impl MyReadBuffer {
         target[..result].copy_from_slice(&self.data[self.start_pos..self.start_pos + result]);
 
         self.start_pos += result;
-        self.fix_start_pos_if_possible();
+        self.discard_buffer_if_possible();
 
         result
     }

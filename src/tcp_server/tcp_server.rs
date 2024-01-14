@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 use rust_extensions::{ApplicationStates, Logger};
 use tokio::{
     io::AsyncWriteExt,
-    net::{tcp::OwnedReadHalf, TcpListener},
+    net::{TcpListener, TcpStream},
 };
 
 use crate::{
@@ -109,14 +109,14 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
                     break;
                 }
 
-                let (read_half, write_half) = tcp_stream.into_split();
+                //    let (read_half, write_half) = tcp_stream.into_split();
                 //let mut log_context = HashMap::new();
                 //log_context.insert("Id".to_string(), connection_id.to_string());
                 //log_context.insert("ServerSocketName".to_string(), context_name.to_string());
 
                 let connection = TcpSocketConnection::new(
                     context_name.clone(),
-                    write_half,
+                    None,
                     connection_id,
                     Some(socket_addr),
                     logger.clone(),
@@ -134,7 +134,7 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
                     threads_statistics.read_threads.increase();
                     connection.update_read_thread_status(TcpThreadStatus::Started);
 
-                    handle_new_connection(read_half, connection, logger_spawned, socket_callback)
+                    handle_new_connection(tcp_stream, connection, logger_spawned, socket_callback)
                         .await;
 
                     threads_statistics.read_threads.decrease();
@@ -157,7 +157,7 @@ pub async fn handle_new_connection<
     TSocketCallback,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 >(
-    tcp_stream: OwnedReadHalf,
+    tcp_stream: TcpStream,
     connection: TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
@@ -168,7 +168,7 @@ pub async fn handle_new_connection<
     TSocketCallback:
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
 {
-    let mut socket_reader = SocketReaderTcpStream::new(tcp_stream);
+    let mut socket_reader = SocketReaderTcpStream::new_as_tcp_stream(tcp_stream);
 
     let mut read_serializer = TSerializer::default();
 
@@ -183,12 +183,16 @@ pub async fn handle_new_connection<
     .await;
 
     if result.is_err() {
-        connection.disconnect().await;
+        socket_reader.shutdown().await;
         connection.update_read_thread_status(TcpThreadStatus::Finished);
         return;
     }
 
     let contract = result.unwrap();
+
+    let write_half = socket_reader.get_write_part();
+
+    connection.set_write_half(write_half).await;
 
     let connection = Arc::new(connection);
 
