@@ -8,3 +8,5 @@ pub use read_buffer::ReadBuffer;
 pub use socket_reader::{SocketReader, SocketReaderTcpStream};
 
 pub use socket_reader_in_mem::SocketReaderInMem;
+mod my_read_buffer;
+pub use my_read_buffer::*;
