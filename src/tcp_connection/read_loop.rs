@@ -14,7 +14,6 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
     read_serializer: TSerializer,
     connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     socket_callback: &Arc<TSocketCallback>,
-    meta_data: TSerializationMetadata,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
@@ -33,7 +32,6 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
         let read_result = read_loop(
             socket_reader,
             read_serializer,
-            meta_data,
             connection_spawned.clone(),
             socket_callback,
         )
@@ -61,7 +59,7 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
 async fn read_loop<TContract, TSerializer, TSerializationMetadata, TSocketCallback>(
     mut socket_reader: SocketReaderTcpStream,
     mut read_serializer: TSerializer,
-    mut meta_data: TSerializationMetadata,
+
     connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     socket_callback: Arc<TSocketCallback>,
 ) -> Result<(), ReadingTcpContractFail>
@@ -73,12 +71,13 @@ where
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
+    let mut meta_data = TSerializationMetadata::default();
     loop {
         let contract = read_packet(
             &connection,
             &mut socket_reader,
             &mut read_serializer,
-            &mut meta_data,
+            Some(&meta_data),
         )
         .await?;
 
@@ -102,7 +101,7 @@ pub async fn read_packet<TContract, TSerializer, TSerializationMetadata>(
     connection: &TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>,
     socket_reader: &mut SocketReaderTcpStream,
     read_serializer: &mut TSerializer,
-    meta_data: &mut TSerializationMetadata,
+    meta_data: Option<&TSerializationMetadata>,
 ) -> Result<TContract, ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
@@ -112,7 +111,7 @@ where
 {
     socket_reader.start_calculating_read_size();
 
-    let read_future = read_serializer.deserialize(socket_reader, &meta_data);
+    let read_future = read_serializer.deserialize(socket_reader, meta_data);
 
     let read_result = tokio::time::timeout(connection.dead_disconnect_timeout, read_future).await;
 
@@ -128,8 +127,6 @@ where
     }
 
     let contract = read_result.unwrap()?;
-
-    meta_data.apply_tcp_contract(&contract);
 
     if contract.is_pong() {
         connection.statistics().update_ping_pong_statistic();

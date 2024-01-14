@@ -172,13 +172,10 @@ pub async fn handle_new_connection<
 
     let mut read_serializer = TSerializer::default();
 
-    let mut serialization_metadata = TSerializationMetadata::default();
-
     let result = super::read::read_first_server_packet(
         &connection,
         &mut socket_reader,
         &mut read_serializer,
-        &mut serialization_metadata,
     )
     .await;
 
@@ -226,7 +223,6 @@ pub async fn handle_new_connection<
         read_serializer,
         &connection,
         &socket_callback,
-        serialization_metadata,
         logger.clone(),
     )
     .await;
