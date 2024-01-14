@@ -1,5 +1,5 @@
 pub struct MyReadBuffer {
-    data: [u8; 65535],
+    data: [u8; 4096],
     start_pos: usize,
     data_len: usize,
 }
@@ -7,7 +7,7 @@ pub struct MyReadBuffer {
 impl MyReadBuffer {
     pub fn new() -> Self {
         Self {
-            data: [0; 65535],
+            data: [0; 4096],
             start_pos: 0,
             data_len: 0,
         }
