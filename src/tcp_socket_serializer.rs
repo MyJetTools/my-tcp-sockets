@@ -23,6 +23,6 @@ pub trait TcpSocketSerializer<
     async fn deserialize<TSocketReader: Send + Sync + 'static + SocketReader>(
         &mut self,
         socket_reader: &mut TSocketReader,
-        metadata: Option<&TSerializationMetadata>,
+        metadata: &TSerializationMetadata,
     ) -> Result<TContract, ReadingTcpContractFail>;
 }

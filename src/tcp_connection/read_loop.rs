@@ -78,7 +78,7 @@ where
             &connection,
             &mut socket_reader,
             &mut read_serializer,
-            Some(&meta_data),
+            &meta_data,
         )
         .await?;
 
@@ -102,7 +102,7 @@ pub async fn read_packet<TContract, TSerializer, TSerializationMetadata>(
     connection: &TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>,
     socket_reader: &mut SocketReaderTcpStream,
     read_serializer: &mut TSerializer,
-    meta_data: Option<&TSerializationMetadata>,
+    meta_data: &TSerializationMetadata,
 ) -> Result<TContract, ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,

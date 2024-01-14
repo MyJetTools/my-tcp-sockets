@@ -11,6 +11,7 @@ pub async fn read_first_server_packet<TContract, TSerializer, TSerializationMeta
     connection: &TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>,
     socket_reader: &mut SocketReaderTcpStream,
     read_serializer: &mut TSerializer,
+    meta_data: &mut TSerializationMetadata,
 ) -> Result<TContract, ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
@@ -22,7 +23,7 @@ where
         &connection,
         socket_reader,
         read_serializer,
-        None,
+        meta_data,
     );
 
     let response = tokio::time::timeout(Duration::from_secs(3), first_packet_reading).await;
@@ -32,6 +33,13 @@ where
     }
 
     let contract = response.unwrap()?;
+
+    if meta_data.is_tcp_contract_related_to_metadata(&contract) {
+        meta_data.apply_tcp_contract(&contract);
+        connection
+            .apply_incoming_packet_to_metadata(&contract)
+            .await;
+    }
 
     Ok(contract)
 }
