@@ -11,9 +11,7 @@ use crate::{
 
 pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallback>(
     socket_reader: SocketReaderTcpStream,
-    read_serializer: TSerializer,
     connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
-    meta_data: TSerializationMetadata,
     socket_callback: &Arc<TSocketCallback>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
@@ -28,6 +26,9 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
     let socket_callback = socket_callback.clone();
 
     let logger_spawned = logger.clone();
+
+    let read_serializer = TSerializer::default();
+    let meta_data = TSerializationMetadata::default();
 
     let read_result = tokio::spawn(async move {
         let read_result = read_loop(

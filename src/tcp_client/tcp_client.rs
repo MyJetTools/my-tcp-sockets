@@ -250,17 +250,13 @@ pub async fn handle_new_connection<
         logger.clone(),
     ));
 
-    let read_serializer = TSerializer::default();
-
     let socket_reader = SocketReaderTcpStream::new_as_owned_tcp_stream(tcp_stream);
 
     connection.threads_statistics.read_threads.increase();
     connection.update_read_thread_status(TcpThreadStatus::Started);
     crate::tcp_connection::read_loop::start(
         socket_reader,
-        read_serializer,
         &connection,
-        TSerializationMetadata::default(),
         &socket_callback,
         logger.clone(),
     )

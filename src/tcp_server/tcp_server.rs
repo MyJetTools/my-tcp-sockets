@@ -114,28 +114,25 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
                 //log_context.insert("Id".to_string(), connection_id.to_string());
                 //log_context.insert("ServerSocketName".to_string(), context_name.to_string());
 
-                let connection = TcpSocketConnection::new(
-                    context_name.clone(),
-                    None,
-                    connection_id,
-                    Some(socket_addr),
-                    logger.clone(),
-                    max_send_payload_size,
-                    send_timeout,
-                    Duration::from_secs(20),
-                    threads_statistics.clone(),
-                )
-                .await;
-
                 let logger_spawned = logger.clone();
                 let socket_callback = socket_callback.clone();
+                let threads_statistics = threads_statistics.clone();
+                let context_name = context_name.clone();
                 tokio::task::spawn(async move {
-                    let threads_statistics = connection.threads_statistics.clone();
                     threads_statistics.read_threads.increase();
-                    connection.update_read_thread_status(TcpThreadStatus::Started);
 
-                    handle_new_connection(tcp_stream, connection, logger_spawned, socket_callback)
-                        .await;
+                    handle_new_connection(
+                        context_name,
+                        tcp_stream,
+                        logger_spawned,
+                        socket_callback,
+                        connection_id,
+                        socket_addr,
+                        &threads_statistics,
+                        max_send_payload_size,
+                        send_timeout,
+                    )
+                    .await;
 
                     threads_statistics.read_threads.decrease();
                 });
@@ -157,10 +154,15 @@ pub async fn handle_new_connection<
     TSocketCallback,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 >(
+    master_socket_name: Arc<String>,
     tcp_stream: TcpStream,
-    connection: TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
+    connection_id: ConnectionId,
+    socket_addr: SocketAddr,
+    threads_statistics: &Arc<ThreadsStatistics>,
+    max_send_payload_size: usize,
+    send_timeout: Duration,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
@@ -170,29 +172,25 @@ pub async fn handle_new_connection<
 {
     let mut socket_reader = SocketReaderTcpStream::new_as_tcp_stream(tcp_stream);
 
-    let mut read_serializer = TSerializer::default();
-
-    let mut meta_data = TSerializationMetadata::default();
-
-    let result = super::read::read_first_server_packet(
-        &connection,
-        &mut socket_reader,
-        &mut read_serializer,
-        &mut meta_data,
-    )
-    .await;
-
-    if result.is_err() {
+    if socket_reader.init_first_payload().await.is_err() {
         socket_reader.shutdown().await;
-        connection.update_read_thread_status(TcpThreadStatus::Finished);
         return;
     }
 
-    let contract = result.unwrap();
-
     let write_half = socket_reader.get_write_part();
 
-    connection.set_write_half(write_half).await;
+    let connection = TcpSocketConnection::new(
+        master_socket_name,
+        Some(write_half),
+        connection_id,
+        Some(socket_addr),
+        logger.clone(),
+        max_send_payload_size,
+        send_timeout,
+        Duration::from_secs(20),
+        threads_statistics.clone(),
+    )
+    .await;
 
     let connection = Arc::new(connection);
 
@@ -211,21 +209,13 @@ pub async fn handle_new_connection<
         return;
     }
 
-    if !super::read::callback_payload(&socket_callback, &connection, contract).await {
-        connection.disconnect().await;
-        connection.update_read_thread_status(TcpThreadStatus::Finished);
-        return;
-    }
-
     tokio::spawn(
         super::dead_connection_detector::start_server_dead_connection_detector(connection.clone()),
     );
 
     crate::tcp_connection::read_loop::start(
         socket_reader,
-        read_serializer,
         &connection,
-        meta_data,
         &socket_callback,
         logger.clone(),
     )

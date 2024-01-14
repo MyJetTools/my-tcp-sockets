@@ -60,6 +60,10 @@ impl SocketReaderTcpStream {
         }
     }
 
+    pub async fn init_first_payload(&mut self) -> Result<(), ReadingTcpContractFail> {
+        self.read_to_internal_buffer().await
+    }
+
     pub fn start_calculating_read_size(&mut self) {
         self.read_size = 0;
     }
