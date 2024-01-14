@@ -260,6 +260,7 @@ pub async fn handle_new_connection<
         socket_reader,
         read_serializer,
         &connection,
+        TSerializationMetadata::default(),
         &socket_callback,
         logger.clone(),
     )

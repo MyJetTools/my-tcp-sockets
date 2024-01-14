@@ -13,6 +13,7 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
     socket_reader: SocketReaderTcpStream,
     read_serializer: TSerializer,
     connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
+    meta_data: TSerializationMetadata,
     socket_callback: &Arc<TSocketCallback>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
@@ -32,6 +33,7 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
         let read_result = read_loop(
             socket_reader,
             read_serializer,
+            meta_data,
             connection_spawned.clone(),
             socket_callback,
         )
@@ -59,7 +61,7 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
 async fn read_loop<TContract, TSerializer, TSerializationMetadata, TSocketCallback>(
     mut socket_reader: SocketReaderTcpStream,
     mut read_serializer: TSerializer,
-
+    mut meta_data: TSerializationMetadata,
     connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     socket_callback: Arc<TSocketCallback>,
 ) -> Result<(), ReadingTcpContractFail>
@@ -71,7 +73,6 @@ where
         Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 {
-    let mut meta_data = TSerializationMetadata::default();
     loop {
         let contract = read_packet(
             &connection,

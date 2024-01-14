@@ -208,6 +208,15 @@ pub async fn handle_new_connection<
         return;
     }
 
+    let mut meta_data = TSerializationMetadata::default();
+
+    if meta_data.is_tcp_contract_related_to_metadata(&contract) {
+        meta_data.apply_tcp_contract(&contract);
+        connection
+            .apply_incoming_packet_to_metadata(&contract)
+            .await;
+    }
+
     if !super::read::callback_payload(&socket_callback, &connection, contract).await {
         connection.disconnect().await;
         connection.update_read_thread_status(TcpThreadStatus::Finished);
@@ -222,6 +231,7 @@ pub async fn handle_new_connection<
         socket_reader,
         read_serializer,
         &connection,
+        meta_data,
         &socket_callback,
         logger.clone(),
     )
