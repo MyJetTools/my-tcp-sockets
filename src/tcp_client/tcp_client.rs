@@ -176,7 +176,7 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
                 let connection = Arc::new(
                     TcpSocketConnection::new(
                         master_socket_name.clone(),
-                        Some(write_socket),
+                        write_socket,
                         connection_id,
                         None,
                         logger.clone(),

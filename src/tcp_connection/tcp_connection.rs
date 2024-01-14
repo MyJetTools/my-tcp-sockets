@@ -73,7 +73,7 @@ impl<
 {
     pub async fn new(
         master_socket_name: Arc<String>,
-        socket: Option<OwnedWriteHalf>,
+        socket: OwnedWriteHalf,
         id: ConnectionId,
         addr: Option<SocketAddr>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
@@ -200,11 +200,6 @@ impl<
             .as_mut()
             .unwrap()
             .apply_tcp_contract(contract);
-    }
-
-    pub async fn set_write_half(&self, write_half: OwnedWriteHalf) {
-        let mut write_access = self.inner.stream.lock().await;
-        write_access.set_write_half(write_half);
     }
 }
 

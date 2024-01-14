@@ -181,7 +181,7 @@ pub async fn handle_new_connection<
 
     let connection = TcpSocketConnection::new(
         master_socket_name,
-        Some(write_half),
+        write_half,
         connection_id,
         Some(socket_addr),
         logger.clone(),

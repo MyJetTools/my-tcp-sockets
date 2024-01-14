@@ -1,5 +1,5 @@
 #[cfg(not(test))]
-const REUSABLE_BUFFER_CAPACITY: usize = 65535;
+const REUSABLE_BUFFER_CAPACITY: usize = 16384;
 
 #[cfg(test)]
 const REUSABLE_BUFFER_CAPACITY: usize = 10;
