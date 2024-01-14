@@ -1,9 +1,6 @@
 use async_trait::async_trait;
 
-use tokio::{
-    io::{AsyncReadExt, BufReader, ReadHalf},
-    net::TcpStream,
-};
+use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 
 use super::{ReadBuffer, ReadingTcpContractFail};
 
@@ -67,14 +64,14 @@ pub trait SocketReader {
 }
 
 pub struct SocketReaderTcpStream {
-    tcp_stream: BufReader<ReadHalf<TcpStream>>,
+    tcp_stream: OwnedReadHalf,
     pub read_size: usize,
 }
 
 impl SocketReaderTcpStream {
-    pub fn new(tcp_stream: ReadHalf<TcpStream>) -> Self {
+    pub fn new(tcp_stream: OwnedReadHalf) -> Self {
         Self {
-            tcp_stream: BufReader::new(tcp_stream),
+            tcp_stream,
             read_size: 0,
         }
     }

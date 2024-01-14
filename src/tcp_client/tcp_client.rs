@@ -3,9 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rust_extensions::Logger;
+use tokio::net::tcp::OwnedReadHalf;
 use tokio::{net::TcpStream, sync::Mutex};
-
-use tokio::io::{self, ReadHalf};
 
 use crate::socket_reader::SocketReaderTcpStream;
 use crate::tcp_connection::TcpThreadStatus;
@@ -168,7 +167,7 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
                     Some(socket_context.clone()),
                 );
 
-                let (read_socket, write_socket) = io::split(tcp_stream);
+                let (read_socket, write_socket) = tcp_stream.into_split();
 
                 // let mut log_context = HashMap::new();
                 // log_context.insert("ConnectionId".to_string(), connection_id.to_string());
@@ -222,7 +221,7 @@ pub async fn handle_new_connection<
     TSocketCallback,
     TSerializationMetadata,
 >(
-    tcp_stream: ReadHalf<TcpStream>,
+    tcp_stream: OwnedReadHalf,
     connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,

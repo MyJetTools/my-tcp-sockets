@@ -2,8 +2,8 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use rust_extensions::{ApplicationStates, Logger};
 use tokio::{
-    io::{self, AsyncWriteExt, ReadHalf},
-    net::{TcpListener, TcpStream},
+    io::AsyncWriteExt,
+    net::{tcp::OwnedReadHalf, TcpListener},
 };
 
 use crate::{
@@ -103,21 +103,20 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
 
     loop {
         match listener.accept().await {
-            Ok((tcp_stream, socket_addr)) => {
-                let (read_tcp_stream, mut write_socket) = io::split(tcp_stream);
-
+            Ok((mut tcp_stream, socket_addr)) => {
                 if app_states.is_shutting_down() {
-                    write_socket.shutdown().await.unwrap();
+                    tcp_stream.shutdown().await.unwrap();
                     break;
                 }
 
+                let (read_half, write_half) = tcp_stream.into_split();
                 //let mut log_context = HashMap::new();
                 //log_context.insert("Id".to_string(), connection_id.to_string());
                 //log_context.insert("ServerSocketName".to_string(), context_name.to_string());
 
                 let connection = TcpSocketConnection::new(
                     context_name.clone(),
-                    write_socket,
+                    write_half,
                     connection_id,
                     Some(socket_addr),
                     logger.clone(),
@@ -135,13 +134,8 @@ async fn accept_sockets_loop<TContract, TSerializer, TSocketCallback, TSerializa
                     threads_statistics.read_threads.increase();
                     connection.update_read_thread_status(TcpThreadStatus::Started);
 
-                    handle_new_connection(
-                        read_tcp_stream,
-                        connection,
-                        logger_spawned,
-                        socket_callback,
-                    )
-                    .await;
+                    handle_new_connection(read_half, connection, logger_spawned, socket_callback)
+                        .await;
 
                     threads_statistics.read_threads.decrease();
                 });
@@ -163,7 +157,7 @@ pub async fn handle_new_connection<
     TSocketCallback,
     TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
 >(
-    tcp_stream: ReadHalf<TcpStream>,
+    tcp_stream: OwnedReadHalf,
     connection: TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,

@@ -6,7 +6,7 @@ use std::time::Duration;
 use rust_extensions::Logger;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop};
 
-use tokio::{io::WriteHalf, net::TcpStream};
+use tokio::net::tcp::OwnedWriteHalf;
 
 use crate::{ConnectionId, TcpSerializationMetadata, TcpSocketSerializer};
 
@@ -73,7 +73,7 @@ impl<
 {
     pub async fn new(
         master_socket_name: Arc<String>,
-        socket: WriteHalf<TcpStream>,
+        socket: OwnedWriteHalf,
         id: ConnectionId,
         addr: Option<SocketAddr>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
