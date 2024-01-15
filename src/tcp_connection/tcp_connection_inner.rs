@@ -7,7 +7,7 @@ use std::{
 };
 
 use rust_extensions::{
-    events_loop::{EventsLoop, EventsLoopTick},
+    events_loop::{EventsLoopPublisher, EventsLoopTick},
     Logger,
 };
 use tokio::sync::Mutex;
@@ -46,10 +46,11 @@ impl<
         max_send_payload_size: usize,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         threads_statistics: Arc<crate::ThreadsStatistics>,
+        events_loop_publisher: EventsLoopPublisher<()>,
     ) -> Self {
         Self {
             stream: Mutex::new(stream),
-            buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new()),
+            buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new(events_loop_publisher)),
             max_send_payload_size,
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),
@@ -80,11 +81,6 @@ impl<
         self.write_thread_status
             .load(std::sync::atomic::Ordering::SeqCst)
             .into()
-    }
-
-    pub async fn set_send_to_socket_event_loop(&self, send_to_socket_event_loop: EventsLoop<()>) {
-        let mut write_access = self.buffer_to_send_inner.lock().await;
-        write_access.events_loop = Some(send_to_socket_event_loop);
     }
 
     pub async fn push_contract(&self, contract: &TContract) -> usize {
@@ -173,9 +169,11 @@ impl<
     pub async fn push_payload(&self, payload: &[u8]) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
-        write_access.push_payload(|tcp_buffer_chunk| {
+        let result = write_access.push_payload(|tcp_buffer_chunk| {
             tcp_buffer_chunk.push_slice(payload);
-        })
+        });
+
+        result
     }
 
     pub async fn push_send_buffer_to_connection(&self) {
@@ -231,16 +229,16 @@ impl<
             self.connected
                 .store(false, std::sync::atomic::Ordering::Relaxed);
             self.statistics.disconnect();
+        }
 
+        {
             let mut inner = self.buffer_to_send_inner.lock().await;
-
             inner.buffer_to_send = None;
-            if inner.events_loop_is_started {
-                if let Some(events_loop) = &mut inner.events_loop {
-                    events_loop.stop();
-                }
+            if let Some(events_loop_publisher) = inner.events_loop_publisher.take() {
+                events_loop_publisher.stop();
             }
         }
+
         just_disconnected
     }
 
@@ -262,7 +260,7 @@ impl<
     > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
     async fn started(&self) {
-        //println!("EventsLoop started: {:?}", self.get_log_context().await);
+        //  println!("EventsLoop started: {:?}", self.get_log_context().await);
 
         self.update_write_thread_status(TcpThreadStatus::Started);
         self.threads_statistics.write_threads.increase();
@@ -273,7 +271,7 @@ impl<
     }
 
     async fn finished(&self) {
-        // println!("EventsLoop finished: {:?}", self.get_log_context().await);
+        //        println!("EventsLoop finished: {:?}", self.get_log_context().await);
         self.update_write_thread_status(TcpThreadStatus::Finished);
         self.threads_statistics.write_threads.decrease();
     }

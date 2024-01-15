@@ -17,13 +17,13 @@ pub struct TcpConnectionStream {
 impl TcpConnectionStream {
     pub fn new(
         id: ConnectionId,
-        tcp_stream: OwnedWriteHalf,
+        tcp_stream: Option<OwnedWriteHalf>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         send_time_out: Duration,
         master_socket_name: Arc<String>,
     ) -> Self {
         Self {
-            tcp_stream: Some(tcp_stream),
+            tcp_stream,
             logger,
             send_time_out,
             connection_name: None,

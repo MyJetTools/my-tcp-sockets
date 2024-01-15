@@ -10,7 +10,7 @@ use tokio::net::tcp::OwnedWriteHalf;
 
 use crate::{ConnectionId, TcpSerializationMetadata, TcpSocketSerializer};
 
-use super::{TcpConnectionInner, TcpConnectionStream};
+use super::{TcpConnectionInner, TcpConnectionStates, TcpConnectionStream};
 
 #[derive(Debug)]
 pub enum TcpThreadStatus {
@@ -63,6 +63,7 @@ pub struct TcpSocketConnection<
     pub dead_disconnect_timeout: Duration,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub threads_statistics: Arc<crate::ThreadsStatistics>,
+    pub events_loop: EventsLoop<()>,
 }
 
 impl<
@@ -73,7 +74,7 @@ impl<
 {
     pub async fn new(
         master_socket_name: Arc<String>,
-        socket: OwnedWriteHalf,
+        socket: Option<OwnedWriteHalf>,
         id: ConnectionId,
         addr: Option<SocketAddr>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
@@ -82,29 +83,33 @@ impl<
         dead_disconnect_timeout: Duration,
         threads_statistics: Arc<crate::ThreadsStatistics>,
     ) -> Self {
-        let mut send_to_socket_event_loop = EventsLoop::new(
-            format!("TcpConnection {}.{}", master_socket_name.as_str(), id),
+        let connection_stream = TcpConnectionStream::new(
+            id,
+            socket,
+            logger.clone(),
+            send_timeout,
+            master_socket_name.clone(),
+        );
+
+        let mut events_loop = EventsLoop::new(
+            format!("TcpConnection {}.{}", master_socket_name, id),
             logger.clone(),
         )
         .set_iteration_timeout(Duration::from_secs(60));
-
-        let connection_stream =
-            TcpConnectionStream::new(id, socket, logger.clone(), send_timeout, master_socket_name);
-
-        threads_statistics.connections_objects.increase();
 
         let inner = Arc::new(TcpConnectionInner::new(
             connection_stream,
             max_send_payload_size,
             logger.clone(),
             threads_statistics.clone(),
+            events_loop.get_publisher(),
         ));
 
-        send_to_socket_event_loop.register_event_loop(inner.clone());
+        threads_statistics.connections_objects.increase();
 
-        inner
-            .set_send_to_socket_event_loop(send_to_socket_event_loop)
-            .await;
+        events_loop.register_event_loop(inner.clone());
+
+        events_loop.start(Arc::new(TcpConnectionStates::new()));
 
         Self {
             id,
@@ -113,6 +118,7 @@ impl<
             addr,
             dead_disconnect_timeout,
             threads_statistics,
+            events_loop,
         }
     }
 
@@ -152,7 +158,6 @@ impl<
         if !self.inner.is_connected() {
             return 0;
         }
-
         self.inner.push_many_contracts(contracts).await
     }
 

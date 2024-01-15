@@ -1,10 +1,13 @@
-use std::sync::Arc;
-
-use rust_extensions::events_loop::EventsLoop;
+use rust_extensions::events_loop::EventsLoopPublisher;
 
 use crate::TcpSocketSerializer;
 
-use super::{TcpBufferChunk, TcpBufferToSend, TcpConnectionStates};
+use super::{TcpBufferChunk, TcpBufferToSend};
+
+pub enum PublishResult {
+    EventLoopIsNotStarted,
+    Disconnected,
+}
 
 pub struct BufferToSendWrapper<
     TContract: Send + Sync + 'static,
@@ -12,11 +15,10 @@ pub struct BufferToSendWrapper<
     TSerializationMetadata: Default + Send + Sync + 'static,
 > {
     pub buffer_to_send: Option<TcpBufferToSend>,
-    pub events_loop: Option<EventsLoop<()>>,
-    pub events_loop_is_started: bool,
     pub serializer: Option<TSerializer>,
     phantom_contract: std::marker::PhantomData<TContract>,
     pub meta_data: Option<TSerializationMetadata>,
+    pub events_loop_publisher: Option<EventsLoopPublisher<()>>,
 }
 
 impl<
@@ -25,14 +27,14 @@ impl<
         TSerializationMetadata: Default + Send + Sync + 'static,
     > BufferToSendWrapper<TContract, TSerializer, TSerializationMetadata>
 {
-    pub fn new() -> Self {
+    pub fn new(events_loop_publisher: EventsLoopPublisher<()>) -> Self {
         Self {
             buffer_to_send: Some(TcpBufferToSend::new()),
-            events_loop: None,
-            events_loop_is_started: false,
+
             serializer: None,
             phantom_contract: std::marker::PhantomData,
             meta_data: None,
+            events_loop_publisher: Some(events_loop_publisher),
         }
     }
 
@@ -41,19 +43,19 @@ impl<
         if let Some(buffer_to_send) = self.buffer_to_send.as_mut() {
             result = buffer_to_send.add_payload_directly_to_chunk(add_payload);
 
-            if !self.events_loop_is_started {
-                if let Some(events_loop) = &mut self.events_loop {
-                    let tcp_connection_states = TcpConnectionStates::new();
-                    events_loop.start(Arc::new(tcp_connection_states));
-                    self.events_loop_is_started = true;
-                } else {
-                    panic!("Events loop is not set");
-                }
-            }
-
-            if let Some(events_loop) = &self.events_loop {
+            if let Some(events_loop) = self.events_loop_publisher.as_ref() {
                 events_loop.send(());
             }
+
+            /*
+            if !self.events_loop_is_started {
+                let tcp_connection_states = TcpConnectionStates::new();
+                self.events_loop.start(Arc::new(tcp_connection_states));
+                self.events_loop_is_started = true;
+            }
+
+            self.events_loop.send(());
+             */
         }
 
         result
