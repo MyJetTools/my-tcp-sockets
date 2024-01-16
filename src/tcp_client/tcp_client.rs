@@ -11,7 +11,10 @@ use crate::tcp_connection::TcpThreadStatus;
 use crate::{
     tcp_connection::TcpSocketConnection, ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
-use crate::{TcpClientSocketSettings, TcpContract, TcpSerializationMetadata, ThreadsStatistics};
+use crate::{
+    TcpClientSocketSettings, TcpContract, TcpSerializerMetadata, TcpSerializerMetadataFactory,
+    ThreadsStatistics,
+};
 
 const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
 const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
@@ -64,10 +67,12 @@ impl TcpClient {
     pub async fn start<
         TContract,
         TSerializer,
+        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+        TTcpSerializerMetadataFactory,
         TSocketCallback,
-        TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
     >(
         &self,
+        tcp_serializer_factory: Arc<TTcpSerializerMetadataFactory>,
         socket_callback: Arc<TSocketCallback>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
@@ -78,10 +83,12 @@ impl TcpClient {
             + 'static
             + TcpSocketSerializer<TContract, TSerializationMetadata>,
 
-        TSocketCallback: Send
+        TTcpSerializerMetadataFactory:
+            TcpSerializerMetadataFactory<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSocketCallback: SocketEventCallback<TContract, TSerializer, TSerializationMetadata>
+            + Send
             + Sync
-            + 'static
-            + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
+            + 'static,
     {
         let threads_statistics = self.threads_statistics.clone();
         let handle = tokio::spawn(connection_loop(
@@ -95,6 +102,7 @@ impl TcpClient {
             self.send_timeout,
             logger,
             threads_statistics,
+            tcp_serializer_factory,
         ));
 
         let mut background_task = self.background_task.lock().await;
@@ -110,7 +118,13 @@ impl TcpClient {
     }
 }
 
-async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerializationMetadata>(
+async fn connection_loop<
+    TContract,
+    TSerializer,
+    TSerializationMetadata,
+    TSerializerMetadataFactory,
+    TSocketCallback,
+>(
     settings: Arc<dyn TcpClientSocketSettings + Send + Sync + 'static>,
     re_connect_timeout: Duration,
     socket_callback: Arc<TSocketCallback>,
@@ -121,13 +135,16 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
     send_timeout: Duration,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     threads_statistics: Arc<ThreadsStatistics>,
+    meta_data_factory: Arc<TSerializerMetadataFactory>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializerMetadataFactory:
+        TcpSerializerMetadataFactory<TContract, TSerializationMetadata> + Send + Sync + 'static,
     TSocketCallback:
-        Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
     let mut connection_id: ConnectionId = 0;
 
@@ -184,9 +201,12 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
                         send_timeout,
                         disconnect_timeout,
                         threads_statistics.clone(),
+                        meta_data_factory.create().await,
                     )
                     .await,
                 );
+
+                let serializer_meta_data = meta_data_factory.create().await;
 
                 handle_new_connection(
                     read_socket,
@@ -194,6 +214,7 @@ async fn connection_loop<TContract, TSerializer, TSocketCallback, TSerialization
                     logger.clone(),
                     socket_callback.clone(),
                     seconds_to_ping,
+                    serializer_meta_data,
                 )
                 .await;
 
@@ -226,13 +247,14 @@ pub async fn handle_new_connection<
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,
     seconds_to_ping: usize,
+    serializer_metadata: TSerializationMetadata,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     TSocketCallback:
-        Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
     if !crate::tcp_connection::read_loop::execute_on_connected(
         &connection,
@@ -258,6 +280,7 @@ pub async fn handle_new_connection<
         socket_reader,
         &connection,
         &socket_callback,
+        serializer_metadata,
         logger.clone(),
     )
     .await;

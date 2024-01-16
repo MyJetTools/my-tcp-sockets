@@ -5,22 +5,22 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 use crate::{
     socket_reader::{ReadingTcpContractFail, SocketReaderTcpStream},
     tcp_connection::TcpSocketConnection,
-    ConnectionEvent, SocketEventCallback, TcpContract, TcpSerializationMetadata,
-    TcpSocketSerializer,
+    SocketEventCallback, TcpContract, TcpSerializerMetadata, TcpSocketSerializer,
 };
 
 pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallback>(
     socket_reader: SocketReaderTcpStream,
     connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     socket_callback: &Arc<TSocketCallback>,
+    serializer_metadata: TSerializationMetadata,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     TSocketCallback:
-        Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
     let connection_spawned = connection.clone();
     let socket_callback = socket_callback.clone();
@@ -28,13 +28,12 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
     let logger_spawned = logger.clone();
 
     let read_serializer = TSerializer::default();
-    let meta_data = TSerializationMetadata::default();
 
     let read_result = tokio::spawn(async move {
         let read_result = read_loop(
             socket_reader,
             read_serializer,
-            meta_data,
+            serializer_metadata,
             connection_spawned.clone(),
             socket_callback,
         )
@@ -70,9 +69,9 @@ where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     TSocketCallback:
-        Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
     loop {
         let contract = read_packet(
@@ -90,12 +89,7 @@ where
                 .await;
         }
 
-        socket_callback
-            .handle(ConnectionEvent::Payload {
-                connection: connection.clone(),
-                payload: contract,
-            })
-            .await;
+        socket_callback.payload(&connection, contract).await;
     }
 }
 
@@ -109,7 +103,7 @@ where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
-    TSerializationMetadata: Default + TcpSerializationMetadata<TContract> + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
 {
     socket_reader.start_calculating_read_size();
 
@@ -155,17 +149,15 @@ where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     TSocketCallback:
-        Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
     let socket_callback = socket_callback.clone();
     let connection_spawned = connection.clone();
 
     let on_connect_result = tokio::spawn(async move {
-        socket_callback
-            .handle(ConnectionEvent::Connected(connection_spawned.clone()))
-            .await;
+        socket_callback.connected(connection_spawned).await;
     })
     .await;
 
@@ -194,16 +186,15 @@ pub async fn execute_on_disconnected<
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer:
         Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     TSocketCallback:
-        Send + Sync + 'static + SocketEventCallback<TContract, TSerializer, TSerializationMetadata>,
-    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
     let connection_spawned = connection.clone();
     let socket_callback = socket_callback.clone();
+
     let on_disconnect_result = tokio::spawn(async move {
-        socket_callback
-            .handle(ConnectionEvent::Disconnected(connection_spawned))
-            .await;
+        socket_callback.disconnected(connection_spawned).await;
     })
     .await;
 

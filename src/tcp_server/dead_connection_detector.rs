@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{tcp_connection::TcpSocketConnection, TcpSerializationMetadata, TcpSocketSerializer};
+use crate::{tcp_connection::TcpSocketConnection, TcpSerializerMetadata, TcpSocketSerializer};
 
 pub async fn start_server_dead_connection_detector<
     TContract: Send + Sync + 'static,
     TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
 >(
     connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
 ) {

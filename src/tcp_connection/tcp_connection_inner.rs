@@ -12,7 +12,7 @@ use rust_extensions::{
 };
 use tokio::sync::Mutex;
 
-use crate::{TcpSerializationMetadata, TcpSocketSerializer};
+use crate::{TcpSerializerMetadata, TcpSocketSerializer};
 
 use super::{
     tcp_connection::TcpThreadStatus, BufferToSendWrapper, ConnectionStatistics, TcpConnectionStream,
@@ -21,7 +21,7 @@ use super::{
 pub struct TcpConnectionInner<
     TContract: Send + Sync + 'static,
     TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
 > {
     pub stream: Mutex<TcpConnectionStream>,
     pub buffer_to_send_inner:
@@ -38,7 +38,7 @@ pub struct TcpConnectionInner<
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     > TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
     pub fn new(
@@ -47,10 +47,14 @@ impl<
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         threads_statistics: Arc<crate::ThreadsStatistics>,
         events_loop_publisher: EventsLoopPublisher<()>,
+        serializer_metadata: TSerializationMetadata,
     ) -> Self {
         Self {
             stream: Mutex::new(stream),
-            buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new(events_loop_publisher)),
+            buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new(
+                serializer_metadata,
+                events_loop_publisher,
+            )),
             max_send_payload_size,
             connected: AtomicBool::new(true),
             statistics: ConnectionStatistics::new(),
@@ -90,10 +94,6 @@ impl<
             write_access.serializer = Some(TSerializer::default());
         }
 
-        if write_access.meta_data.is_none() {
-            write_access.meta_data = Some(TSerializationMetadata::default());
-        }
-
         let serializer = write_access.serializer.take().unwrap();
 
         let meta_data = write_access.meta_data.take().unwrap();
@@ -119,10 +119,6 @@ impl<
             write_access.serializer = Some(TSerializer::default());
         }
 
-        if write_access.meta_data.is_none() {
-            write_access.meta_data = Some(TSerializationMetadata::default());
-        }
-
         let serializer = write_access.serializer.take().unwrap();
         let meta_data = write_access.meta_data.take().unwrap();
 
@@ -143,10 +139,6 @@ impl<
 
         if write_access.serializer.is_none() {
             write_access.serializer = Some(TSerializer::default());
-        }
-
-        if write_access.meta_data.is_none() {
-            write_access.meta_data = Some(TSerializationMetadata::default());
         }
 
         let serializer = write_access.serializer.take().unwrap();
@@ -256,7 +248,7 @@ impl<
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
     async fn started(&self) {

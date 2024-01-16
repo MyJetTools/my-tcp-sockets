@@ -8,7 +8,7 @@ use crate::{
 #[async_trait]
 pub trait TcpSocketSerializer<
     TContract: Send + Sync + 'static,
-    TSerializationMetadata: Default + Send + Sync + 'static,
+    TSerializationMetadata: Send + Sync + 'static,
 >
 {
     fn serialize(

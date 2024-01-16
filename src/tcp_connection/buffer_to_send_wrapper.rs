@@ -12,7 +12,7 @@ pub enum PublishResult {
 pub struct BufferToSendWrapper<
     TContract: Send + Sync + 'static,
     TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: Default + Send + Sync + 'static,
+    TSerializationMetadata: Send + Sync + 'static,
 > {
     pub buffer_to_send: Option<TcpBufferToSend>,
     pub serializer: Option<TSerializer>,
@@ -24,16 +24,19 @@ pub struct BufferToSendWrapper<
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: Default + Send + Sync + 'static,
+        TSerializationMetadata: Send + Sync + 'static,
     > BufferToSendWrapper<TContract, TSerializer, TSerializationMetadata>
 {
-    pub fn new(events_loop_publisher: EventsLoopPublisher<()>) -> Self {
+    pub fn new(
+        serializer_metadata: TSerializationMetadata,
+        events_loop_publisher: EventsLoopPublisher<()>,
+    ) -> Self {
         Self {
             buffer_to_send: Some(TcpBufferToSend::new()),
 
             serializer: None,
             phantom_contract: std::marker::PhantomData,
-            meta_data: None,
+            meta_data: Some(serializer_metadata),
             events_loop_publisher: Some(events_loop_publisher),
         }
     }

@@ -8,7 +8,7 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop
 
 use tokio::net::tcp::OwnedWriteHalf;
 
-use crate::{ConnectionId, TcpSerializationMetadata, TcpSocketSerializer};
+use crate::{ConnectionId, TcpSerializerMetadata, TcpSocketSerializer};
 
 use super::{TcpConnectionInner, TcpConnectionStates, TcpConnectionStream};
 
@@ -47,14 +47,12 @@ impl Into<TcpThreadStatus> for i32 {
     }
 }
 
-pub struct TcpSocketConnection<
+pub struct TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
+where
     TContract: Send + Sync + 'static,
-    TSerializer,
-    TSerializationMetadata,
-> where
     TSerializer:
         Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
 {
     pub id: ConnectionId,
     inner: Arc<TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>>,
@@ -69,7 +67,7 @@ pub struct TcpSocketConnection<
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     > TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {
     pub async fn new(
@@ -82,6 +80,7 @@ impl<
         send_timeout: Duration,
         dead_disconnect_timeout: Duration,
         threads_statistics: Arc<crate::ThreadsStatistics>,
+        serializer_metadata: TSerializationMetadata,
     ) -> Self {
         let connection_stream = TcpConnectionStream::new(
             id,
@@ -103,6 +102,7 @@ impl<
             logger.clone(),
             threads_statistics.clone(),
             events_loop.get_publisher(),
+            serializer_metadata,
         ));
 
         threads_statistics.connections_objects.increase();
@@ -196,9 +196,6 @@ impl<
 
     pub async fn apply_incoming_packet_to_metadata(&self, contract: &TContract) {
         let mut write_access = self.inner.buffer_to_send_inner.lock().await;
-        if write_access.meta_data.is_none() {
-            write_access.meta_data = Some(TSerializationMetadata::default());
-        }
 
         write_access
             .meta_data
@@ -211,7 +208,7 @@ impl<
 impl<
         TContract: Send + Sync + 'static,
         TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: TcpSerializationMetadata<TContract> + Default + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
     > Drop for TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {
     fn drop(&mut self) {

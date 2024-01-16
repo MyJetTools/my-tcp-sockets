@@ -17,7 +17,6 @@ pub async fn start<TContract, TSerializer, TSocketCallback>(
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract>,
-    TSocketCallback: Send + Sync + 'static + SocketEventCallback<TContract, TSerializer>,
 {
     let connection_id = connection.id;
 

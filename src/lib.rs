@@ -7,9 +7,10 @@ mod types;
 pub use tcp_client::TcpClient;
 pub use tcp_server::TcpServer;
 mod socket_event_callback;
+mod tcp_serializer_metadata;
 mod tcp_sockets_settings;
 
-pub use socket_event_callback::{ConnectionEvent, SocketEventCallback};
+pub use socket_event_callback::*;
 pub use tcp_socket_serializer::*;
 pub use tcp_sockets_settings::TcpClientSocketSettings;
 pub use types::ConnectionId;
@@ -18,4 +19,5 @@ pub use tcp_contract::*;
 mod threads_statistics;
 pub use threads_statistics::*;
 mod tcp_write_buffer;
+pub use tcp_serializer_metadata::*;
 pub use tcp_write_buffer::*;
