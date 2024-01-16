@@ -72,7 +72,7 @@ impl TcpClient {
         TSocketCallback,
     >(
         &self,
-        tcp_serializer_factory: Arc<TTcpSerializerMetadataFactory>,
+        serializer_metadata_factory: Arc<TTcpSerializerMetadataFactory>,
         socket_callback: Arc<TSocketCallback>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
@@ -102,7 +102,7 @@ impl TcpClient {
             self.send_timeout,
             logger,
             threads_statistics,
-            tcp_serializer_factory,
+            serializer_metadata_factory,
         ));
 
         let mut background_task = self.background_task.lock().await;
