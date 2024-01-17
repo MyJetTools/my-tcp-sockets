@@ -11,32 +11,33 @@ pub enum PublishResult {
 
 pub struct BufferToSendWrapper<
     TContract: Send + Sync + 'static,
-    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializerState> + Send + Sync + 'static,
+    TSerializerState: Send + Sync + 'static,
 > {
     pub buffer_to_send: Option<TcpBufferToSend>,
     pub serializer: Option<TSerializer>,
     phantom_contract: std::marker::PhantomData<TContract>,
-    pub meta_data: Option<TSerializationMetadata>,
+    pub serializer_state: Option<TSerializerState>,
     pub events_loop_publisher: Option<EventsLoopPublisher<()>>,
 }
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: Send + Sync + 'static,
-    > BufferToSendWrapper<TContract, TSerializer, TSerializationMetadata>
+        TSerializer: TcpSocketSerializer<TContract, TSerializerState> + Send + Sync + 'static,
+        TSerializerState: Send + Sync + 'static,
+    > BufferToSendWrapper<TContract, TSerializer, TSerializerState>
 {
     pub fn new(
-        serializer_metadata: TSerializationMetadata,
+        serializer: TSerializer,
+        serializer_state: TSerializerState,
         events_loop_publisher: EventsLoopPublisher<()>,
     ) -> Self {
         Self {
             buffer_to_send: Some(TcpBufferToSend::new()),
 
-            serializer: None,
+            serializer: Some(serializer),
             phantom_contract: std::marker::PhantomData,
-            meta_data: Some(serializer_metadata),
+            serializer_state: Some(serializer_state),
             events_loop_publisher: Some(events_loop_publisher),
         }
     }

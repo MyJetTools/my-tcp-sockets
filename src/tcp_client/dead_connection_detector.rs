@@ -3,13 +3,13 @@ use std::{sync::Arc, time::Duration};
 use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 
 use crate::{
-    tcp_connection::TcpSocketConnection, TcpContract, TcpSerializerMetadata, TcpSocketSerializer,
+    tcp_connection::TcpSocketConnection, TcpContract, TcpSerializerState, TcpSocketSerializer,
 };
 
 pub async fn start<
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
 >(
     connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     seconds_to_ping: usize,

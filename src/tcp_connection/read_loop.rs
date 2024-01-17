@@ -5,20 +5,20 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 use crate::{
     socket_reader::{ReadingTcpContractFail, SocketReaderTcpStream},
     tcp_connection::TcpSocketConnection,
-    SocketEventCallback, TcpContract, TcpSerializerMetadata, TcpSocketSerializer,
+    SocketEventCallback, TcpContract, TcpSerializerState, TcpSocketSerializer,
 };
 
 pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallback>(
     socket_reader: SocketReaderTcpStream,
     connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     socket_callback: &Arc<TSocketCallback>,
-    serializer_metadata: TSerializationMetadata,
+    read_serializer: TSerializer,
+    read_serializer_metadata: TSerializationMetadata,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer:
-        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
-    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
     TSocketCallback:
         SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
@@ -27,13 +27,11 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
 
     let logger_spawned = logger.clone();
 
-    let read_serializer = TSerializer::default();
-
     let read_result = tokio::spawn(async move {
         let read_result = read_loop(
             socket_reader,
             read_serializer,
-            serializer_metadata,
+            read_serializer_metadata,
             connection_spawned.clone(),
             socket_callback,
         )
@@ -67,9 +65,8 @@ async fn read_loop<TContract, TSerializer, TSerializationMetadata, TSocketCallba
 ) -> Result<(), ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer:
-        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
-    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
     TSocketCallback:
         SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
@@ -84,9 +81,7 @@ where
 
         if meta_data.is_tcp_contract_related_to_metadata(&contract) {
             meta_data.apply_tcp_contract(&contract);
-            connection
-                .apply_incoming_packet_to_metadata(&contract)
-                .await;
+            connection.update_incoming_packet_to_state(&contract).await;
         }
 
         socket_callback.payload(&connection, contract).await;
@@ -101,9 +96,8 @@ pub async fn read_packet<TContract, TSerializer, TSerializationMetadata>(
 ) -> Result<TContract, ReadingTcpContractFail>
 where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer:
-        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
-    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
 {
     socket_reader.start_calculating_read_size();
 
@@ -147,9 +141,8 @@ pub async fn execute_on_connected<TContract, TSerializer, TSerializationMetadata
 ) -> bool
 where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer:
-        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
-    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
     TSocketCallback:
         SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {
@@ -184,9 +177,8 @@ pub async fn execute_on_disconnected<
     logger: &Arc<dyn Logger + Send + Sync + 'static>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
-    TSerializer:
-        Default + Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
-    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializationMetadata>,
+    TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
     TSocketCallback:
         SocketEventCallback<TContract, TSerializer, TSerializationMetadata> + Send + Sync + 'static,
 {

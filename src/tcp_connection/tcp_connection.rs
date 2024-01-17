@@ -8,7 +8,7 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop
 
 use tokio::net::tcp::OwnedWriteHalf;
 
-use crate::{ConnectionId, TcpSerializerMetadata, TcpSocketSerializer};
+use crate::{ConnectionId, TcpSerializerState, TcpSocketSerializer};
 
 use super::{TcpConnectionInner, TcpConnectionStates, TcpConnectionStream};
 
@@ -50,9 +50,8 @@ impl Into<TcpThreadStatus> for i32 {
 pub struct TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 where
     TContract: Send + Sync + 'static,
-    TSerializer:
-        Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
 {
     pub id: ConnectionId,
     inner: Arc<TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>>,
@@ -66,9 +65,9 @@ where
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
-    > TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
+        TSerializer: TcpSocketSerializer<TContract, TSerializerState> + Send + Sync + 'static,
+        TSerializerState: TcpSerializerState<TContract> + Send + Sync + 'static,
+    > TcpSocketConnection<TContract, TSerializer, TSerializerState>
 {
     pub async fn new(
         master_socket_name: Arc<String>,
@@ -80,7 +79,8 @@ impl<
         send_timeout: Duration,
         dead_disconnect_timeout: Duration,
         threads_statistics: Arc<crate::ThreadsStatistics>,
-        serializer_metadata: TSerializationMetadata,
+        serializer: TSerializer,
+        serializer_state: TSerializerState,
     ) -> Self {
         let connection_stream = TcpConnectionStream::new(
             id,
@@ -102,7 +102,8 @@ impl<
             logger.clone(),
             threads_statistics.clone(),
             events_loop.get_publisher(),
-            serializer_metadata,
+            serializer,
+            serializer_state,
         ));
 
         threads_statistics.connections_objects.increase();
@@ -194,11 +195,11 @@ impl<
         silence_duration > self.dead_disconnect_timeout
     }
 
-    pub async fn apply_incoming_packet_to_metadata(&self, contract: &TContract) {
+    pub async fn update_incoming_packet_to_state(&self, contract: &TContract) {
         let mut write_access = self.inner.buffer_to_send_inner.lock().await;
 
         write_access
-            .meta_data
+            .serializer_state
             .as_mut()
             .unwrap()
             .apply_tcp_contract(contract);
@@ -207,8 +208,8 @@ impl<
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
     > Drop for TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 {
     fn drop(&mut self) {

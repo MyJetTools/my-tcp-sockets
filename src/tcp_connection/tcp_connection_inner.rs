@@ -12,7 +12,7 @@ use rust_extensions::{
 };
 use tokio::sync::Mutex;
 
-use crate::{TcpSerializerMetadata, TcpSocketSerializer};
+use crate::{TcpSerializerState, TcpSocketSerializer};
 
 use super::{
     tcp_connection::TcpThreadStatus, BufferToSendWrapper, ConnectionStatistics, TcpConnectionStream,
@@ -20,12 +20,11 @@ use super::{
 
 pub struct TcpConnectionInner<
     TContract: Send + Sync + 'static,
-    TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-    TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializerState> + Send + Sync + 'static,
+    TSerializerState: TcpSerializerState<TContract> + Send + Sync + 'static,
 > {
     pub stream: Mutex<TcpConnectionStream>,
-    pub buffer_to_send_inner:
-        Mutex<BufferToSendWrapper<TContract, TSerializer, TSerializationMetadata>>,
+    pub buffer_to_send_inner: Mutex<BufferToSendWrapper<TContract, TSerializer, TSerializerState>>,
     max_send_payload_size: usize,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
@@ -37,9 +36,9 @@ pub struct TcpConnectionInner<
 
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
-    > TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
+        TSerializer: TcpSocketSerializer<TContract, TSerializerState> + Send + Sync + 'static,
+        TSerializerState: TcpSerializerState<TContract> + Send + Sync + 'static,
+    > TcpConnectionInner<TContract, TSerializer, TSerializerState>
 {
     pub fn new(
         stream: TcpConnectionStream,
@@ -47,12 +46,14 @@ impl<
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         threads_statistics: Arc<crate::ThreadsStatistics>,
         events_loop_publisher: EventsLoopPublisher<()>,
-        serializer_metadata: TSerializationMetadata,
+        serializer: TSerializer,
+        serializer_state: TSerializerState,
     ) -> Self {
         Self {
             stream: Mutex::new(stream),
             buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new(
-                serializer_metadata,
+                serializer,
+                serializer_state,
                 events_loop_publisher,
             )),
             max_send_payload_size,
@@ -90,24 +91,16 @@ impl<
     pub async fn push_contract(&self, contract: &TContract) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
-        if write_access.serializer.is_none() {
-            write_access.serializer = Some(TSerializer::default());
-        }
-
         let serializer = write_access.serializer.take().unwrap();
 
-        let meta_data = write_access.meta_data.take().unwrap();
-
-        if write_access.serializer.is_none() {
-            write_access.serializer = Some(TSerializer::default());
-        }
+        let serializer_state = write_access.serializer_state.take().unwrap();
 
         let result = write_access.push_payload(|tcp_buffer_chunk| {
-            serializer.serialize(tcp_buffer_chunk, contract, &meta_data);
+            serializer.serialize(tcp_buffer_chunk, contract, &serializer_state);
         });
 
         write_access.serializer = Some(serializer);
-        write_access.meta_data = Some(meta_data);
+        write_access.serializer_state = Some(serializer_state);
 
         result
     }
@@ -115,45 +108,37 @@ impl<
     pub async fn push_many_contracts(&self, contracts: &[TContract]) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
-        if write_access.serializer.is_none() {
-            write_access.serializer = Some(TSerializer::default());
-        }
-
         let serializer = write_access.serializer.take().unwrap();
-        let meta_data = write_access.meta_data.take().unwrap();
+        let serializer_state = write_access.serializer_state.take().unwrap();
 
         let result = write_access.push_payload(|tcp_buffer_chunk| {
             for contract in contracts {
-                serializer.serialize(tcp_buffer_chunk, contract, &meta_data);
+                serializer.serialize(tcp_buffer_chunk, contract, &serializer_state);
             }
         });
 
         write_access.serializer = Some(serializer);
 
-        write_access.meta_data = Some(meta_data);
+        write_access.serializer_state = Some(serializer_state);
 
         result
     }
     pub async fn send_ping(&self) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
-        if write_access.serializer.is_none() {
-            write_access.serializer = Some(TSerializer::default());
-        }
-
         let serializer = write_access.serializer.take().unwrap();
 
         let ping = serializer.get_ping();
 
-        let meta_data = write_access.meta_data.take().unwrap();
+        let serializer_state = write_access.serializer_state.take().unwrap();
 
         let result = write_access.push_payload(|tcp_buffer_chunk| {
-            serializer.serialize(tcp_buffer_chunk, &ping, &meta_data);
+            serializer.serialize(tcp_buffer_chunk, &ping, &serializer_state);
         });
 
         write_access.serializer = Some(serializer);
 
-        write_access.meta_data = Some(meta_data);
+        write_access.serializer_state = Some(serializer_state);
 
         result
     }
@@ -247,8 +232,8 @@ impl<
 #[async_trait::async_trait]
 impl<
         TContract: Send + Sync + 'static,
-        TSerializer: Default + TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
-        TSerializationMetadata: TcpSerializerMetadata<TContract> + Send + Sync + 'static,
+        TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+        TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
     > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
     async fn started(&self) {
