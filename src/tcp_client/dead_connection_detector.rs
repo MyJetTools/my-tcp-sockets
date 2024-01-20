@@ -31,8 +31,6 @@ pub async fn start<
             break;
         }
 
-        connection.statistics().one_second_tick();
-
         seconds_remains_to_ping -= 1;
 
         if seconds_remains_to_ping == 0 {

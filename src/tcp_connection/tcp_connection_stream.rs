@@ -33,19 +33,24 @@ impl TcpConnectionStream {
     }
 
     // If result is true - connections has error
-    pub async fn send_payload_to_tcp_connection(&mut self, payload: &[u8]) -> bool {
+    pub async fn send_payload_to_tcp_connection(&mut self, payload: &[u8]) -> Result<(), ()> {
         if let Some(tcp_stream) = self.tcp_stream.as_mut() {
             match send_with_timeout(tcp_stream, payload, self.send_time_out).await {
-                Ok(_) => return false,
-                Err(err) => self.logger.write_info(
-                    "send_payload_to_tcp_connection".to_string(),
-                    err,
-                    Some(self.get_log_context()),
-                ),
+                Ok(_) => {
+                    return Ok(());
+                }
+                Err(err) => {
+                    self.logger.write_info(
+                        "send_payload_to_tcp_connection".to_string(),
+                        err,
+                        Some(self.get_log_context()),
+                    );
+                    return Err(());
+                }
             }
         }
 
-        false
+        Ok(())
     }
 
     // this function has to used only form connection_inner disconnect

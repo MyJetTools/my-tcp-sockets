@@ -1,14 +1,11 @@
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, AtomicI32},
-        Arc,
-    },
+    sync::{atomic::AtomicI32, Arc},
 };
 
 use rust_extensions::{
     events_loop::{EventsLoopPublisher, EventsLoopTick},
-    Logger,
+    Logger, UnsafeValue,
 };
 use tokio::sync::Mutex;
 
@@ -26,7 +23,7 @@ pub struct TcpConnectionInner<
     pub stream: Mutex<TcpConnectionStream>,
     pub buffer_to_send_inner: Mutex<BufferToSendWrapper<TContract, TSerializer, TSerializerState>>,
     max_send_payload_size: usize,
-    connected: AtomicBool,
+    connected: UnsafeValue<bool>,
     pub statistics: ConnectionStatistics,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub threads_statistics: Arc<crate::ThreadsStatistics>,
@@ -57,7 +54,7 @@ impl<
                 events_loop_publisher,
             )),
             max_send_payload_size,
-            connected: AtomicBool::new(true),
+            connected: true.into(),
             statistics: ConnectionStatistics::new(),
             logger,
             threads_statistics,
@@ -178,9 +175,14 @@ impl<
             while let Some(payload) =
                 payload_to_send.get_next_slice_to_send(self.max_send_payload_size)
             {
-                if write_access.send_payload_to_tcp_connection(payload).await {
-                    connection_has_error = true;
-                    break;
+                match write_access.send_payload_to_tcp_connection(payload).await {
+                    Ok(_) => {
+                        self.statistics.update_sent_amount(payload.len());
+                    }
+                    Err(_) => {
+                        connection_has_error = true;
+                        break;
+                    }
                 }
             }
         }
@@ -203,8 +205,7 @@ impl<
         };
 
         if just_disconnected {
-            self.connected
-                .store(false, std::sync::atomic::Ordering::Relaxed);
+            self.connected.set_value(false);
             self.statistics.disconnect();
         }
 
@@ -220,7 +221,7 @@ impl<
     }
 
     pub fn is_connected(&self) -> bool {
-        self.connected.load(std::sync::atomic::Ordering::Relaxed)
+        self.connected.get_value()
     }
 
     pub async fn get_log_context(&self) -> HashMap<String, String> {
