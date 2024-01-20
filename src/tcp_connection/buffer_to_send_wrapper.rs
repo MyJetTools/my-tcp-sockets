@@ -50,16 +50,6 @@ impl<
             if let Some(events_loop) = self.events_loop_publisher.as_ref() {
                 events_loop.send(());
             }
-
-            /*
-            if !self.events_loop_is_started {
-                let tcp_connection_states = TcpConnectionStates::new();
-                self.events_loop.start(Arc::new(tcp_connection_states));
-                self.events_loop_is_started = true;
-            }
-
-            self.events_loop.send(());
-             */
         }
 
         result

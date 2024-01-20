@@ -24,6 +24,8 @@ pub async fn start<
     loop {
         tokio::time::sleep(ping_interval).await;
 
+        connection.statistics().one_second_tick();
+
         if connection.get_read_thread_status().is_finished()
             || connection.get_write_thread_status().is_finished()
         {

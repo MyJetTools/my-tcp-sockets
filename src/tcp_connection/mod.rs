@@ -16,3 +16,5 @@ mod tcp_connection_inner;
 pub use tcp_connection_inner::*;
 mod buffer_to_send_wrapper;
 pub use buffer_to_send_wrapper::*;
+mod one_second_metric;
+pub use one_second_metric::*;
