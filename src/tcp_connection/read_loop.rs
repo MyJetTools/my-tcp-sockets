@@ -38,7 +38,7 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
         .await;
 
         if let Err(err) = read_result {
-            logger_spawned.write_error(
+            logger_spawned.write_debug_info(
                 "Socket Read Loop".to_string(),
                 format!("Socket Read loop exited with error: {:?}", err),
                 Some(connection_spawned.get_log_context().await),
