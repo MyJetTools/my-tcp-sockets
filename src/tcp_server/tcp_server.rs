@@ -186,14 +186,8 @@ pub async fn handle_new_connection<
     TSocketCallback:
         SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
 {
-    let mut socket_reader = SocketReaderTcpStream::new_as_tcp_stream(tcp_stream);
-
-    if socket_reader.init_first_payload().await.is_err() {
-        socket_reader.shutdown().await;
-        return;
-    }
-
-    let write_half = socket_reader.get_write_part();
+    let (read_half, write_half) = tcp_stream.into_split();
+    let socket_reader = SocketReaderTcpStream::new(read_half);
 
     let connection = TcpSocketConnection::new(
         master_socket_name,

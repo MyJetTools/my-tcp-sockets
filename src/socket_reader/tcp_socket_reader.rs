@@ -1,60 +1,18 @@
 use async_trait::async_trait;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream,
-    },
-};
+use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 
 use super::{MyReadBuffer, ReadBuffer, ReadingTcpContractFail, SocketReader};
 
-pub enum TcpStreamMode {
-    Owned(OwnedReadHalf),
-    TcpStream(Option<tokio::net::TcpStream>),
-}
-
-impl TcpStreamMode {
-    pub fn get_write_half(&mut self) -> Option<OwnedWriteHalf> {
-        match self {
-            TcpStreamMode::Owned(_) => {
-                return None;
-            }
-            TcpStreamMode::TcpStream(tcp_stream) => {
-                let tcp_stream = tcp_stream.take().unwrap();
-                let (read_half, write_half) = tcp_stream.into_split();
-                *self = TcpStreamMode::Owned(read_half);
-                Some(write_half)
-            }
-        }
-    }
-
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-        match self {
-            TcpStreamMode::Owned(tcp_stream) => tcp_stream.read(buf).await,
-            TcpStreamMode::TcpStream(tcp_stream) => tcp_stream.as_mut().unwrap().read(buf).await,
-        }
-    }
-}
-
 pub struct SocketReaderTcpStream {
-    tcp_stream: TcpStreamMode,
+    tcp_stream: OwnedReadHalf,
     my_read_buffer: MyReadBuffer,
     pub read_size: usize,
 }
 
 impl SocketReaderTcpStream {
-    pub fn new_as_tcp_stream(tcp_stream: TcpStream) -> Self {
+    pub fn new(tcp_stream: OwnedReadHalf) -> Self {
         Self {
-            tcp_stream: TcpStreamMode::TcpStream(Some(tcp_stream)),
-            read_size: 0,
-            my_read_buffer: MyReadBuffer::new(),
-        }
-    }
-
-    pub fn new_as_owned_tcp_stream(tcp_stream: OwnedReadHalf) -> Self {
-        Self {
-            tcp_stream: TcpStreamMode::Owned(tcp_stream),
+            tcp_stream,
             read_size: 0,
             my_read_buffer: MyReadBuffer::new(),
         }
@@ -66,14 +24,6 @@ impl SocketReaderTcpStream {
 
     pub fn start_calculating_read_size(&mut self) {
         self.read_size = 0;
-    }
-
-    pub fn get_write_part(&mut self) -> OwnedWriteHalf {
-        if let Some(write_half) = self.tcp_stream.get_write_half() {
-            return write_half;
-        }
-
-        panic!("OwnedWriteHalf is already taken");
     }
 
     async fn read_to_internal_buffer(&mut self) -> Result<(), ReadingTcpContractFail> {
@@ -89,15 +39,6 @@ impl SocketReaderTcpStream {
         self.my_read_buffer.advance_data_len(bytes_to_advance);
 
         Ok(())
-    }
-
-    pub async fn shutdown(&mut self) {
-        match &mut self.tcp_stream {
-            TcpStreamMode::Owned(_) => {}
-            TcpStreamMode::TcpStream(tcp_stream) => {
-                let _ = tcp_stream.as_mut().unwrap().shutdown().await;
-            }
-        }
     }
 }
 

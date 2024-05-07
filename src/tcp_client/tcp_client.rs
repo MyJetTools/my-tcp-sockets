@@ -264,7 +264,7 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback, TSer
         logger.clone(),
     ));
 
-    let socket_reader = SocketReaderTcpStream::new_as_owned_tcp_stream(tcp_stream);
+    let socket_reader = SocketReaderTcpStream::new(tcp_stream);
 
     connection.threads_statistics.read_threads.increase();
     connection.update_read_thread_status(TcpThreadStatus::Started);
