@@ -10,7 +10,9 @@ use tokio::net::tcp::OwnedWriteHalf;
 
 use crate::{ConnectionId, TcpSerializerState, TcpSocketSerializer};
 
-use super::{TcpConnectionInner, TcpConnectionStates, TcpConnectionStream};
+use super::{
+    TcpConnectionAbstraction, TcpConnectionInner, TcpConnectionStates, TcpConnectionStream,
+};
 
 #[derive(Debug)]
 pub enum TcpThreadStatus {
@@ -214,5 +216,18 @@ impl<
 {
     fn drop(&mut self) {
         self.threads_statistics.connections_objects.decrease();
+    }
+}
+
+#[async_trait::async_trait]
+impl<TContract, TSerializer, TSerializationMetadata> TcpConnectionAbstraction
+    for TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
+where
+    TContract: Send + Sync + 'static,
+    TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
+    TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
+{
+    async fn disconnect(&self) {
+        self.inner.disconnect().await;
     }
 }

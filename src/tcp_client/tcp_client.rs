@@ -16,6 +16,8 @@ use crate::{
     ThreadsStatistics,
 };
 
+use super::TcpConnectionHolder;
+
 const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
 const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -28,6 +30,7 @@ pub struct TcpClient {
     max_send_payload_size: usize,
     send_timeout: Duration,
     background_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    tcp_connection_holder: Arc<TcpConnectionHolder>,
     pub threads_statistics: Arc<ThreadsStatistics>,
 }
 
@@ -46,6 +49,7 @@ impl TcpClient {
             send_timeout: DEFAULT_SEND_TIMEOUT,
             background_task: Mutex::new(None),
             threads_statistics: Arc::new(ThreadsStatistics::new()),
+            tcp_connection_holder: Arc::new(TcpConnectionHolder::new()),
         }
     }
 
@@ -101,10 +105,17 @@ impl TcpClient {
             logger,
             threads_statistics,
             serializer_metadata_factory,
+            self.tcp_connection_holder.clone(),
         ));
 
         let mut background_task = self.background_task.lock().await;
         background_task.replace(handle);
+    }
+
+    pub async fn try_disconnect_current_connection(&self) {
+        if let Some(connection) = self.tcp_connection_holder.get_connection().await {
+            connection.disconnect().await;
+        }
     }
 
     pub async fn stop(&self) {
@@ -134,6 +145,7 @@ async fn connection_loop<
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     threads_statistics: Arc<ThreadsStatistics>,
     serializer_factory: Arc<TSerializerMetadataFactory>,
+    tcp_connection_holder: Arc<TcpConnectionHolder>,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializerState>,
@@ -204,6 +216,10 @@ async fn connection_loop<
                     .await,
                 );
 
+                tcp_connection_holder
+                    .set_connection(connection.clone())
+                    .await;
+
                 handle_new_connection(
                     read_socket,
                     connection.clone(),
@@ -214,6 +230,8 @@ async fn connection_loop<
                     serializer_factory.create_serializer_state().await,
                 )
                 .await;
+
+                tcp_connection_holder.remove_connection().await;
 
                 logger.write_debug_info(
                     LOG_PROCESS.to_string(),
