@@ -11,7 +11,7 @@ mod tcp_sockets_settings;
 
 pub use socket_event_callback::*;
 pub use tcp_socket_serializer::*;
-pub use tcp_sockets_settings::TcpClientSocketSettings;
+pub use tcp_sockets_settings::*;
 pub use types::ConnectionId;
 mod tcp_contract;
 pub use tcp_contract::*;
