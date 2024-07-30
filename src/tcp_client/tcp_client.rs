@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rust_extensions::Logger;
-use tokio::net::tcp::OwnedReadHalf;
 use tokio::{net::TcpStream, sync::Mutex};
 
 use crate::socket_reader::SocketReaderTcpStream;
@@ -12,8 +11,8 @@ use crate::{
     tcp_connection::TcpSocketConnection, ConnectionId, SocketEventCallback, TcpSocketSerializer,
 };
 use crate::{
-    TcpClientSocketSettings, TcpContract, TcpSerializerFactory, TcpSerializerState,
-    ThreadsStatistics,
+    MaybeTlsReadStream, TcpClientSocketSettings, TcpContract, TcpSerializerFactory,
+    TcpSerializerState, ThreadsStatistics,
 };
 
 use super::TcpConnectionHolder;
@@ -193,11 +192,47 @@ async fn connection_loop<
                     Some(socket_context.clone()),
                 );
 
-                let (read_socket, write_socket) = tcp_stream.into_split();
+                #[cfg(feature = "with-tls")]
+                let (read_socket, write_socket) =
+                    if let Some(tls_settings) = settings.get_tls_settings().await {
+                        let tls_stream = super::do_handshake(
+                            master_socket_name.as_str(),
+                            tcp_stream,
+                            tls_settings.server_name,
+                        )
+                        .await;
+
+                        if let Err(err) = tls_stream {
+                            logger.write_error(
+                                LOG_PROCESS.to_string(),
+                                format!("Can not connect to {}. Reason: {}", host_port, err),
+                                Some(socket_context.clone()),
+                            );
+                            continue;
+                        }
+                        let tls_stream = tls_stream.unwrap();
+
+                        let (read, write) = tokio::io::split(tls_stream);
+
+                        (
+                            MaybeTlsReadStream::Tls(read),
+                            crate::MaybeTlsWriteStream::Tls(write),
+                        )
+                    } else {
+                        let (read, write) = tcp_stream.into_split();
+
+                        (
+                            MaybeTlsReadStream::Plain(read),
+                            crate::MaybeTlsWriteStream::Plain(write),
+                        )
+                    };
 
                 // let mut log_context = HashMap::new();
                 // log_context.insert("ConnectionId".to_string(), connection_id.to_string());
                 // log_context.insert("SocketName".to_string(), socket_name.to_string());
+
+                #[cfg(not(feature = "with-tls"))]
+                let (read_socket, write_socket) = tcp_stream.into_split();
 
                 let connection = Arc::new(
                     TcpSocketConnection::new(
@@ -252,7 +287,7 @@ async fn connection_loop<
 }
 
 pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback, TSerializerState>(
-    tcp_stream: OwnedReadHalf,
+    tcp_stream: MaybeTlsReadStream,
     connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializerState>>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     socket_callback: Arc<TSocketCallback>,

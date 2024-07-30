@@ -6,9 +6,7 @@ use std::time::Duration;
 use rust_extensions::Logger;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop};
 
-use tokio::net::tcp::OwnedWriteHalf;
-
-use crate::{ConnectionId, TcpSerializerState, TcpSocketSerializer};
+use crate::{ConnectionId, MaybeTlsWriteStream, TcpSerializerState, TcpSocketSerializer};
 
 use super::{
     TcpConnectionAbstraction, TcpConnectionInner, TcpConnectionStates, TcpConnectionStream,
@@ -73,7 +71,7 @@ impl<
 {
     pub async fn new(
         master_socket_name: Arc<String>,
-        socket: Option<OwnedWriteHalf>,
+        socket: Option<MaybeTlsWriteStream>,
         id: ConnectionId,
         addr: Option<SocketAddr>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,

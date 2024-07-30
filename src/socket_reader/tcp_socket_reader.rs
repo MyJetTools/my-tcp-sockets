@@ -1,16 +1,18 @@
 use async_trait::async_trait;
-use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
+use tokio::io::AsyncReadExt;
+
+use crate::MaybeTlsReadStream;
 
 use super::{MyReadBuffer, ReadBuffer, ReadingTcpContractFail, SocketReader};
 
 pub struct SocketReaderTcpStream {
-    tcp_stream: OwnedReadHalf,
+    tcp_stream: MaybeTlsReadStream,
     my_read_buffer: MyReadBuffer,
     pub read_size: usize,
 }
 
 impl SocketReaderTcpStream {
-    pub fn new(tcp_stream: OwnedReadHalf) -> Self {
+    pub fn new(tcp_stream: MaybeTlsReadStream) -> Self {
         Self {
             tcp_stream,
             read_size: 0,

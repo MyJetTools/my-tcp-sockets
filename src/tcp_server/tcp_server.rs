@@ -187,6 +187,12 @@ pub async fn handle_new_connection<
         SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
 {
     let (read_half, write_half) = tcp_stream.into_split();
+
+    #[cfg(feature = "with-tls")]
+    let read_half = crate::MaybeTlsReadStream::Plain(read_half);
+    #[cfg(feature = "with-tls")]
+    let write_half = crate::MaybeTlsWriteStream::Plain(write_half);
+
     let socket_reader = SocketReaderTcpStream::new(read_half);
 
     let connection = TcpSocketConnection::new(

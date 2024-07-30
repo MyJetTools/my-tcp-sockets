@@ -19,3 +19,11 @@ mod threads_statistics;
 pub use threads_statistics::*;
 mod tcp_write_buffer;
 pub use tcp_write_buffer::*;
+#[cfg(feature = "with-tls")]
+mod maybe_tls;
+#[cfg(feature = "with-tls")]
+pub use maybe_tls::*;
+#[cfg(not(feature = "with-tls"))]
+mod no_tls;
+#[cfg(not(feature = "with-tls"))]
+pub use no_tls::*;

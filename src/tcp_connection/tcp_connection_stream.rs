@@ -1,12 +1,12 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use rust_extensions::Logger;
-use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf};
+use tokio::io::AsyncWriteExt;
 
-use crate::ConnectionId;
+use crate::{ConnectionId, MaybeTlsWriteStream};
 
 pub struct TcpConnectionStream {
-    tcp_stream: Option<OwnedWriteHalf>,
+    tcp_stream: Option<MaybeTlsWriteStream>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     send_time_out: Duration,
     connection_name: Option<String>,
@@ -17,7 +17,7 @@ pub struct TcpConnectionStream {
 impl TcpConnectionStream {
     pub fn new(
         id: ConnectionId,
-        tcp_stream: Option<OwnedWriteHalf>,
+        tcp_stream: Option<MaybeTlsWriteStream>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         send_time_out: Duration,
         master_socket_name: Arc<String>,
@@ -85,7 +85,7 @@ impl TcpConnectionStream {
 }
 
 async fn send_with_timeout(
-    tcp_stream: &mut OwnedWriteHalf,
+    tcp_stream: &mut MaybeTlsWriteStream,
     payload: &[u8],
     send_timeout: Duration,
 ) -> Result<(), String> {
