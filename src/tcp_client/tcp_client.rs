@@ -23,7 +23,7 @@ const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct TcpClient {
     settings: Arc<dyn TcpClientSocketSettings + Send + Sync + 'static>,
     re_connect_timeout: Duration,
-    seconds_to_ping: Duration,
+    seconds_to_ping: usize,
     disconnect_timeout: Duration,
     name: Arc<String>,
     max_send_payload_size: usize,
@@ -41,7 +41,7 @@ impl TcpClient {
         Self {
             settings,
             re_connect_timeout: Duration::from_secs(3),
-            seconds_to_ping: Duration::from_secs(3),
+            seconds_to_ping: 3,
             disconnect_timeout: Duration::from_secs(9),
             name: Arc::new(name),
             max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
@@ -52,8 +52,8 @@ impl TcpClient {
         }
     }
 
-    pub fn set_ping_interval(mut self, duration: Duration) -> Self {
-        self.seconds_to_ping = duration;
+    pub fn set_seconds_to_ping(mut self, seconds: usize) -> Self {
+        self.seconds_to_ping = seconds;
         self
     }
 
