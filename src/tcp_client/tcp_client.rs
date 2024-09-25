@@ -47,7 +47,7 @@ impl TcpClient {
             max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
             send_timeout: DEFAULT_SEND_TIMEOUT,
             background_task: Mutex::new(None),
-            threads_statistics: Arc::new(ThreadsStatistics::new()),
+            threads_statistics: Arc::new(ThreadsStatistics::default()),
             tcp_connection_holder: Arc::new(TcpConnectionHolder::new()),
         }
     }

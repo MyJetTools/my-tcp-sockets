@@ -6,16 +6,18 @@ pub struct TcpBufferToSend {
     pub payloads: VecDequeAutoShrink<TcpBufferChunk>,
 }
 
-impl TcpBufferToSend {
-    pub fn new() -> Self {
+impl Default for TcpBufferToSend {
+    fn default() -> Self {
         Self {
             payloads: VecDequeAutoShrink::new(16),
         }
     }
+}
 
+impl TcpBufferToSend {
     fn get_payload_to_append(&mut self) -> &mut TcpBufferChunk {
         if self.payloads.is_empty() {
-            self.payloads.push_back(TcpBufferChunk::new());
+            self.payloads.push_back(TcpBufferChunk::default());
         }
 
         self.payloads.get_mut(0).unwrap()
@@ -29,7 +31,7 @@ impl TcpBufferToSend {
 
     pub fn add_payload_directly_to_chunk(
         &mut self,
-        tcp_buffer_chunk: impl Fn(&mut TcpBufferChunk) -> (),
+        tcp_buffer_chunk: impl Fn(&mut TcpBufferChunk),
     ) -> usize {
         let chunk = self.get_payload_to_append();
         let len_before = chunk.len();
@@ -67,7 +69,7 @@ mod test {
 
     #[test]
     fn test_less_amount_than_buffer() {
-        let mut tcp_payloads = TcpBufferToSend::new();
+        let mut tcp_payloads = TcpBufferToSend::default();
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5]);
 
@@ -95,7 +97,7 @@ mod test {
 
     #[test]
     fn test_less_amount_exactly_as_buffer() {
-        let mut tcp_payloads = TcpBufferToSend::new();
+        let mut tcp_payloads = TcpBufferToSend::default();
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
@@ -113,7 +115,7 @@ mod test {
 
     #[test]
     fn test_amount_bugger_than_reusable_buffer() {
-        let mut tcp_payloads = TcpBufferToSend::new();
+        let mut tcp_payloads = TcpBufferToSend::default();
 
         tcp_payloads.add_payload(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 
@@ -131,7 +133,7 @@ mod test {
 
     #[test]
     fn test_we_add_to_the_same_chunk() {
-        let mut tcp_payloads = TcpBufferToSend::new();
+        let mut tcp_payloads = TcpBufferToSend::default();
 
         tcp_payloads.add_payload(&[1, 2, 3, 4]);
 

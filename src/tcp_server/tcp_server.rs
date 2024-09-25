@@ -33,7 +33,7 @@ impl TcpServer {
             addr,
             max_send_payload_size: DEFAULT_MAX_SEND_PAYLOAD_SIZE,
             send_timeout: DEFAULT_SEND_TIMEOUT,
-            threads_statistics: Arc::new(ThreadsStatistics::new()),
+            threads_statistics: Arc::new(ThreadsStatistics::default()),
         }
     }
 

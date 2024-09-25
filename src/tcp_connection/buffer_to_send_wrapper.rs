@@ -33,7 +33,7 @@ impl<
         events_loop_publisher: EventsLoopPublisher<()>,
     ) -> Self {
         Self {
-            buffer_to_send: Some(TcpBufferToSend::new()),
+            buffer_to_send: Some(TcpBufferToSend::default()),
 
             serializer: Some(serializer),
             phantom_contract: std::marker::PhantomData,
@@ -42,7 +42,7 @@ impl<
         }
     }
 
-    pub fn push_payload(&mut self, add_payload: impl Fn(&mut TcpBufferChunk) -> ()) -> usize {
+    pub fn push_payload(&mut self, add_payload: impl Fn(&mut TcpBufferChunk)) -> usize {
         let mut result = 0;
         if let Some(buffer_to_send) = self.buffer_to_send.as_mut() {
             result = buffer_to_send.add_payload_directly_to_chunk(add_payload);

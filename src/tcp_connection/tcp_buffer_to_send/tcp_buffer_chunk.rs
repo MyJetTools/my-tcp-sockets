@@ -11,11 +11,10 @@ pub struct TcpBufferChunk {
     pub created: rust_extensions::date_time::DateTimeAsMicroseconds,
 }
 
-impl TcpBufferChunk {
-    pub fn new() -> Self {
+impl Default for TcpBufferChunk {
+    fn default() -> Self {
         Self {
-            reusable_buffer: BufferInStack::new(),
-
+            reusable_buffer: BufferInStack::default(),
             reusable_data_is_sent: false,
             pos_to_send: 0,
             additional_buffer: Vec::new(),
@@ -23,7 +22,9 @@ impl TcpBufferChunk {
             created: rust_extensions::date_time::DateTimeAsMicroseconds::now(),
         }
     }
+}
 
+impl TcpBufferChunk {
     pub fn push_byte(&mut self, b: u8) {
         if !self.reusable_buffer.push_byte(b) {
             self.additional_buffer.push(b);
@@ -91,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_overload() {
-        let mut chunk = super::TcpBufferChunk::new();
+        let mut chunk = super::TcpBufferChunk::default();
 
         let data_to_add = vec![
             0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8,
