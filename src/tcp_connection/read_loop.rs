@@ -50,7 +50,7 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
     if read_result.is_err() {
         logger.write_error(
             "Socket Read Loop".to_string(),
-            format!("Socket Read loop exited with panic"),
+            "Socket Read loop exited with panic".to_string(),
             Some(connection.get_log_context().await),
         );
     }
@@ -105,7 +105,7 @@ where
 
     let read_result = tokio::time::timeout(connection.dead_disconnect_timeout, read_future).await;
 
-    if let Err(_) = &read_result {
+    if read_result.is_err() {
         connection.logger.write_debug_info(
             "read_loop".to_string(),
             format!("Read timeout {:?}", connection.dead_disconnect_timeout),

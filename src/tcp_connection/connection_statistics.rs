@@ -21,8 +21,8 @@ pub struct ConnectionStatistics {
     pub round_trip_micros: AtomicI64,
 }
 
-impl ConnectionStatistics {
-    pub fn new() -> Self {
+impl Default for ConnectionStatistics {
+    fn default() -> Self {
         let now = DateTimeAsMicroseconds::now();
         Self {
             connected: DateTimeAsMicroseconds::new(now.unix_microseconds),
@@ -38,7 +38,9 @@ impl ConnectionStatistics {
             round_trip_micros: AtomicI64::new(0),
         }
     }
+}
 
+impl ConnectionStatistics {
     pub fn update_read_amount(&self, amount: usize) {
         let now = DateTimeAsMicroseconds::now();
         self.last_receive_moment.update(now);

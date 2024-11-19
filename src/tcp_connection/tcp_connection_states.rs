@@ -1,12 +1,7 @@
 use rust_extensions::ApplicationStates;
 
+#[derive(Default)]
 pub struct TcpConnectionStates {}
-
-impl TcpConnectionStates {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
 
 impl ApplicationStates for TcpConnectionStates {
     fn is_initialized(&self) -> bool {

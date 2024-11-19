@@ -55,7 +55,7 @@ impl<
             )),
             max_send_payload_size,
             connected: true.into(),
-            statistics: ConnectionStatistics::new(),
+            statistics: ConnectionStatistics::default(),
             logger,
             threads_statistics,
             read_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted.as_i32()),
@@ -143,11 +143,11 @@ impl<
     pub async fn push_payload(&self, payload: &[u8]) -> usize {
         let mut write_access = self.buffer_to_send_inner.lock().await;
 
-        let result = write_access.push_payload(|tcp_buffer_chunk| {
-            tcp_buffer_chunk.push_slice(payload);
-        });
+        
 
-        result
+        write_access.push_payload(|tcp_buffer_chunk| {
+            tcp_buffer_chunk.push_slice(payload);
+        })
     }
 
     pub async fn push_send_buffer_to_connection(&self) {

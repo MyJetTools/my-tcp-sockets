@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[derive(Default)]
 pub struct OneSecondMetric {
     intermediary_value: AtomicUsize,
     value: AtomicUsize,

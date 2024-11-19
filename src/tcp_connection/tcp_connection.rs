@@ -29,20 +29,17 @@ impl TcpThreadStatus {
     }
 
     pub fn is_finished(&self) -> bool {
-        match self {
-            TcpThreadStatus::Finished => true,
-            _ => false,
-        }
+        matches!(self, TcpThreadStatus::Finished)
     }
 }
 
-impl Into<TcpThreadStatus> for i32 {
-    fn into(self) -> TcpThreadStatus {
-        match self {
+impl From<i32> for TcpThreadStatus {
+    fn from(val: i32) -> Self {
+        match val {
             0 => TcpThreadStatus::NotStarted,
             1 => TcpThreadStatus::Started,
             2 => TcpThreadStatus::Finished,
-            _ => panic!("Invalid value {} for ThreadStatus", self),
+            _ => panic!("Invalid value {} for ThreadStatus", val),
         }
     }
 }
@@ -110,7 +107,7 @@ impl<
 
         events_loop.register_event_loop(inner.clone());
 
-        events_loop.start(Arc::new(TcpConnectionStates::new()));
+        events_loop.start(Arc::new(TcpConnectionStates::default()));
 
         Self {
             id,

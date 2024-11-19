@@ -9,14 +9,16 @@ pub struct BufferInStack {
     data: [u8; REUSABLE_BUFFER_CAPACITY],
 }
 
-impl BufferInStack {
-    pub fn new() -> Self {
+impl Default for BufferInStack {
+    fn default() -> Self {
         Self {
             data: [0; REUSABLE_BUFFER_CAPACITY],
             len: 0,
         }
     }
+}
 
+impl BufferInStack {
     pub fn push_byte(&mut self, b: u8) -> bool {
         if self.len == REUSABLE_BUFFER_CAPACITY {
             return false;

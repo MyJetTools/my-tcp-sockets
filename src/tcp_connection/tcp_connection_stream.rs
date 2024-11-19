@@ -101,5 +101,5 @@ async fn send_with_timeout(
         return Err(format!("{}", err));
     }
 
-    return Ok(());
+    Ok(())
 }
