@@ -1,12 +1,13 @@
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use rust_extensions::Logger;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop};
 
-use crate::{ConnectionId, MaybeTlsWriteStream, TcpSerializerState, TcpSocketSerializer};
+use crate::{
+    ConnectionId, MaybeTlsWriteStream, SocketAddress, TcpSerializerState, TcpSocketSerializer,
+};
 
 use super::{
     TcpConnectionAbstraction, TcpConnectionInner, TcpConnectionStates, TcpConnectionStream,
@@ -53,7 +54,7 @@ where
     pub id: ConnectionId,
     inner: Arc<TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>>,
 
-    pub addr: Option<SocketAddr>,
+    pub addr: Option<SocketAddress>,
     pub dead_disconnect_timeout: Duration,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub threads_statistics: Arc<crate::ThreadsStatistics>,
@@ -70,7 +71,7 @@ impl<
         master_socket_name: Arc<String>,
         socket: Option<MaybeTlsWriteStream>,
         id: ConnectionId,
-        addr: Option<SocketAddr>,
+        addr: Option<SocketAddress>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         max_send_payload_size: usize,
         send_timeout: Duration,

@@ -222,8 +222,8 @@ async fn connection_loop<
                         let (read, write) = tcp_stream.into_split();
 
                         (
-                            MaybeTlsReadStream::Plain(read),
-                            crate::MaybeTlsWriteStream::Plain(write),
+                            MaybeTlsReadStream::NoTls(read),
+                            crate::MaybeTlsWriteStream::NoTls(write),
                         )
                     };
 
@@ -237,7 +237,7 @@ async fn connection_loop<
                 let connection = Arc::new(
                     TcpSocketConnection::new(
                         master_socket_name.clone(),
-                        Some(write_socket),
+                        Some(write_socket.into()),
                         connection_id,
                         None,
                         logger.clone(),
@@ -256,7 +256,7 @@ async fn connection_loop<
                     .await;
 
                 handle_new_connection(
-                    read_socket,
+                    read_socket.into(),
                     connection.clone(),
                     logger.clone(),
                     socket_callback.clone(),

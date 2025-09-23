@@ -19,11 +19,19 @@ mod threads_statistics;
 pub use threads_statistics::*;
 mod tcp_write_buffer;
 pub use tcp_write_buffer::*;
-#[cfg(feature = "with-tls")]
-mod maybe_tls;
-#[cfg(feature = "with-tls")]
-pub use maybe_tls::*;
-#[cfg(not(feature = "with-tls"))]
-mod no_tls;
-#[cfg(not(feature = "with-tls"))]
-pub use no_tls::*;
+
+#[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+mod no_tls_no_unix_sockets;
+#[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+pub use no_tls_no_unix_sockets::*;
+
+#[cfg(feature = "unix-socket")]
+pub mod unix_socket;
+
+#[cfg(any(feature = "with-tls", feature = "unix-socket"))]
+mod with_tls_or_unix_socket;
+#[cfg(any(feature = "with-tls", feature = "unix-socket"))]
+pub use with_tls_or_unix_socket::*;
+
+mod socket_address;
+pub use socket_address::*;
