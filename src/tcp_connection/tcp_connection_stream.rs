@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use rust_extensions::Logger;
-use tokio::io::AsyncWriteExt;
 
 use crate::{ConnectionId, MaybeTlsWriteStream};
 
@@ -55,6 +54,9 @@ impl TcpConnectionStream {
 
     // this function has to used only form connection_inner disconnect
     pub fn disconnect(&mut self) -> bool {
+        #[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+        use tokio::io::AsyncWriteExt;
+
         if let Some(mut tcp_stream) = self.tcp_stream.take() {
             tokio::spawn(async move {
                 let _ = tcp_stream.shutdown().await;
@@ -89,6 +91,8 @@ async fn send_with_timeout(
     payload: &[u8],
     send_timeout: Duration,
 ) -> Result<(), String> {
+    #[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+    use tokio::io::AsyncWriteExt;
     let result = tokio::time::timeout(send_timeout, tcp_stream.write_all(payload)).await;
 
     if result.is_err() {
