@@ -36,7 +36,7 @@ pub async fn accept_unix_socket_connections_loop<
     while !app_states.is_initialized() {
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
-
+    let _ = tokio::fs::remove_file(unix_socket_addr.as_str()).await;
     let listener = tokio::net::UnixListener::bind(unix_socket_addr.as_str());
 
     let listener = match listener {
