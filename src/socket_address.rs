@@ -19,3 +19,19 @@ impl Into<SocketAddress> for tokio::net::unix::SocketAddr {
         SocketAddress::UnixSocket(self)
     }
 }
+
+#[cfg(feature = "unix-socket")]
+impl std::fmt::Display for SocketAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SocketAddress::Tcp(addr) => write!(f, "Tcp: {}", addr),
+            SocketAddress::UnixSocket(addr) => write!(f, "UnixSocket: {:?}", addr),
+        }
+    }
+}
+
+impl std::fmt::Debug for SocketAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
