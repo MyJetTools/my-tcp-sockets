@@ -21,7 +21,7 @@ pub struct UnixSocketServer {
 }
 
 impl UnixSocketServer {
-    pub fn new(name: String, unix_socket_addr: String) -> Self {
+    pub fn new(name: impl Into<String>, unix_socket_addr: impl Into<String>) -> Self {
         Self {
             name: Arc::new(name),
             unix_socket_addr: Arc::new(unix_socket_addr),
