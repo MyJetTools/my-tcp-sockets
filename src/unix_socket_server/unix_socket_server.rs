@@ -7,8 +7,6 @@ use crate::{
     TcpSocketSerializer, ThreadsStatistics,
 };
 
-//use super::ConnectionsList;
-
 const DEFAULT_MAX_SEND_PAYLOAD_SIZE: usize = 1024 * 1024 * 3;
 const DEFAULT_SEND_TIMEOUT: Duration = Duration::from_secs(30);
 
