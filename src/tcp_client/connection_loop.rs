@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::str::FromStr;
+
 use std::sync::Arc;
 
 use rust_extensions::Logger;
@@ -77,20 +76,8 @@ pub async fn connection_loop<
                 Some(socket_context.clone()),
             );
         } else {
-            let Ok(socket_addr) = SocketAddr::from_str(&host_port) else {
-                logger.write_debug_info(
-                    LOG_PROCESS.to_string(),
-                    format!(
-                        "Invalid host_port to establish tcp connection {}",
-                        host_port
-                    ),
-                    Some(socket_context.clone()),
-                );
-                continue;
-            };
-
             super::connect_to_tcp_socket(
-                socket_addr,
+                &host_port,
                 connection_id,
                 &inner,
                 &socket_callback,

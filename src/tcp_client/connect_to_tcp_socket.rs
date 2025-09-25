@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use rust_extensions::Logger;
@@ -17,7 +16,7 @@ pub async fn connect_to_tcp_socket<
     TSocketCallback,
     TSerializerState,
 >(
-    host_port: SocketAddr,
+    host_port: &str,
     connection_id: i32,
     inner: &TcpClientInner,
     socket_callback: &Arc<TSocketCallback>,
