@@ -20,17 +20,17 @@ pub use tcp_write_buffer::*;
 mod tcp_client;
 pub use tcp_client::*;
 
-#[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+#[cfg(all(not(unix), not(feature = "with-tls")))]
 mod no_tls_no_unix_sockets;
-#[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+#[cfg(all(not(unix), not(feature = "with-tls")))]
 pub use no_tls_no_unix_sockets::*;
 
-#[cfg(feature = "unix-socket")]
+#[cfg(unix)]
 pub mod unix_socket_server;
 
-#[cfg(any(feature = "with-tls", feature = "unix-socket"))]
+#[cfg(any(feature = "with-tls", unix))]
 mod with_tls_or_unix_socket;
-#[cfg(any(feature = "with-tls", feature = "unix-socket"))]
+#[cfg(any(feature = "with-tls", unix))]
 pub use with_tls_or_unix_socket::*;
 
 mod socket_address;

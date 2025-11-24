@@ -15,9 +15,9 @@ mod tls;
 #[cfg(feature = "with-tls")]
 pub use tls::*;
 
-#[cfg(feature = "unix-socket")]
+#[cfg(unix)]
 mod connect_to_unix_socket;
-#[cfg(feature = "unix-socket")]
+#[cfg(unix)]
 use connect_to_unix_socket::*;
 mod handle_new_connection;
 use handle_new_connection::*;

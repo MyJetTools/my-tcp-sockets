@@ -36,7 +36,7 @@ pub async fn connect_to_tcp_socket<
 
     let timeout_result = tokio::time::timeout(inner.connect_timeout, connect_future).await;
 
-    let Ok(unix_socket_stream_result) = timeout_result else {
+    let Ok(tcp_socket_stream_result) = timeout_result else {
         logger.write_error(
             crate::tcp_client::LOG_PROCESS.to_string(),
             "Timeout during establishing connection".to_string(),
@@ -45,8 +45,8 @@ pub async fn connect_to_tcp_socket<
         return;
     };
 
-    let unix_socket = match unix_socket_stream_result {
-        Ok(unix_socket) => unix_socket,
+    let tcp_stream = match tcp_socket_stream_result {
+        Ok(tcp_stream) => tcp_stream,
         Err(err) => {
             logger.write_error(
                 crate::tcp_client::LOG_PROCESS.to_string(),
@@ -63,7 +63,7 @@ pub async fn connect_to_tcp_socket<
         Some(socket_context.clone()),
     );
 
-    let (read_socket, write_socket) = unix_socket.into_split();
+    let (read_socket, write_socket) = tcp_stream.into_split();
 
     let connection = Arc::new(
         TcpSocketConnection::new(

@@ -54,7 +54,7 @@ impl TcpConnectionStream {
 
     // this function has to used only form connection_inner disconnect
     pub fn disconnect(&mut self) -> bool {
-        #[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+        #[cfg(all(not(unix), not(feature = "with-tls")))]
         use tokio::io::AsyncWriteExt;
 
         if let Some(mut tcp_stream) = self.tcp_stream.take() {
@@ -91,7 +91,7 @@ async fn send_with_timeout(
     payload: &[u8],
     send_timeout: Duration,
 ) -> Result<(), String> {
-    #[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+    #[cfg(all(not(unix), not(feature = "with-tls")))]
     use tokio::io::AsyncWriteExt;
     let result = tokio::time::timeout(send_timeout, tcp_stream.write_all(payload)).await;
 

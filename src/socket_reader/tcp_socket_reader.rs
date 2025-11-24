@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-#[cfg(all(not(feature = "unix-socket"), not(feature = "with-tls")))]
+#[cfg(all(not(unix), not(feature = "with-tls")))]
 use tokio::io::AsyncReadExt;
 
 use crate::MaybeTlsReadStream;

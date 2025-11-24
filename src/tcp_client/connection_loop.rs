@@ -54,7 +54,7 @@ pub async fn connection_loop<
         );
 
         if host_port.starts_with("/") || host_port.starts_with("~") {
-            #[cfg(feature = "unix-socket")]
+            #[cfg(unix)]
             super::connect_to_unix_socket(
                 host_port.as_str(),
                 connection_id,
@@ -66,7 +66,7 @@ pub async fn connection_loop<
             )
             .await;
 
-            #[cfg(not(feature = "unix-socket"))]
+            #[cfg(not(unix))]
             logger.write_fatal_error(
                 LOG_PROCESS.to_string(),
                 format!(
