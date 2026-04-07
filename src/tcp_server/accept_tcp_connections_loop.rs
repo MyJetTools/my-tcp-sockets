@@ -1,12 +1,14 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, sync::{Arc}, time::Duration};
 
 use rust_extensions::{ApplicationStates, Logger};
 use tokio::{io::AsyncWriteExt, net::TcpListener};
 
 use crate::{
-    ConnectionId, SocketEventCallback, TcpContract, TcpSerializerFactory, TcpSerializerState,
+   SocketEventCallback, TcpContract, TcpSerializerFactory, TcpSerializerState,
     TcpSocketSerializer, ThreadsStatistics,
 };
+
+
 
 pub async fn accept_tcp_connections_loop<
     TContract,
@@ -38,7 +40,6 @@ pub async fn accept_tcp_connections_loop<
     }
 
     let listener = TcpListener::bind(addr).await.unwrap();
-    let mut connection_id: ConnectionId = 0;
 
     let mut server_socket_log_context = HashMap::new();
     server_socket_log_context.insert("ServerSocketName".to_string(), context_name.to_string());
@@ -64,6 +65,8 @@ pub async fn accept_tcp_connections_loop<
                 let threads_statistics = threads_statistics.clone();
                 let context_name = context_name.clone();
                 let serializer_metadata_factory = serializer_metadata_factory.clone();
+
+                let connection_id = crate::CURRENT_CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 tokio::task::spawn(async move {
                     threads_statistics.read_threads.increase();
 
@@ -84,7 +87,6 @@ pub async fn accept_tcp_connections_loop<
                     threads_statistics.read_threads.decrease();
                 });
 
-                connection_id += 1;
             }
             Err(err) => logger.write_error(
                 "Tcp Accept Socket".to_string(),

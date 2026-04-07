@@ -35,3 +35,6 @@ pub use with_tls_or_unix_socket::*;
 
 mod socket_address;
 pub use socket_address::*;
+
+
+static CURRENT_CONNECTION_ID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
