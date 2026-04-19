@@ -88,9 +88,9 @@ impl<
             master_socket_name.clone(),
         );
 
-        let mut events_loop = EventsLoop::new(
+        let events_loop = EventsLoop::new(
             format!("TcpConnection {}.{}", master_socket_name, id),
-            logger.clone(),
+            
         )
         .set_iteration_timeout(Duration::from_secs(60));
 
@@ -106,9 +106,9 @@ impl<
 
         threads_statistics.connections_objects.increase();
 
-        events_loop.register_event_loop(inner.clone());
+        events_loop.register_event_loop(inner.clone()).await;
 
-        events_loop.start(Arc::new(TcpConnectionStates::default()));
+        events_loop.start(Arc::new(TcpConnectionStates::default()), logger.clone()).await;
 
         Self {
             id,
