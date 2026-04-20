@@ -26,6 +26,7 @@ my-tcp-sockets = { git = "https://github.com/MyJetTools/MyTcpSockets.git", tag =
 - **`TcpServer`**: Accepts incoming TCP connections. Requires `ApplicationStates` and `Logger` from `rust_extensions`.
 - **`TcpClient`**: Connects to a remote server with auto-reconnect. Requires `TcpClientSocketSettings` to provide host/port and optional TLS.
 - **`TcpWriteBuffer`**: Trait for writing bytes. Provides helpers: `write_byte()`, `write_i32()`, `write_u64()`, `write_byte_array()`, `write_pascal_string()`, etc.
+- **`ConnectionId`** (alias for `i32`): Globally unique identifier assigned per `TcpSocketConnection` from a process-wide counter, so IDs do not repeat across reconnects or across server/client instances inside the same process.
 
 ## Minimal protocol example
 ```rust
@@ -101,24 +102,27 @@ impl TcpSerializerFactory<Chat, ChatSerializer, ChatState> for ChatFactory {
 **Serialization helpers**: `TcpWriteBuffer` and `SocketReader` provide symmetric read/write methods for common types. Use `write_byte_array()` / `read_byte_array()` for length-prefixed byte arrays, `write_pascal_string()` for length-prefixed strings (max 255 bytes), or implement custom framing.
 
 ## Handling socket events
+`SocketEventCallback` hooks receive `&mut self`, so your implementation can mutate internal state (counters, caches, per-connection maps) without extra synchronisation.
+
 ```rust
 use std::sync::Arc;
 use async_trait::async_trait;
 use my_tcp_sockets::{SocketEventCallback, tcp_connection::TcpSocketConnection};
 
+#[derive(Clone)]
 struct Echo;
 
 #[async_trait]
 impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
     async fn connected(
-        &self,
+        &mut self,
         connection: Arc<TcpSocketConnection<Chat, ChatSerializer, ChatState>>,
     ) {
         connection.send(&Chat { text: "hello".into() }).await;
     }
 
     async fn payload(
-        &self,
+        &mut self,
         connection: &Arc<TcpSocketConnection<Chat, ChatSerializer, ChatState>>,
         contract: Chat,
     ) {
@@ -127,13 +131,17 @@ impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
     }
 
     async fn disconnected(
-        &self,
+        &mut self,
         _connection: Arc<TcpSocketConnection<Chat, ChatSerializer, ChatState>>,
     ) {
         // clean up resources if needed
     }
 }
 ```
+
+Callback bounds:
+- `TcpServer` / `UnixSocketServer`: `SocketEventCallback + Send + Clone + 'static` — the server clones the callback per accepted connection.
+- `TcpClient`: `SocketEventCallback + Send + 'static` — the client owns a single callback instance for the reconnect loop. `Sync` is **not** required in either case.
 
 ## Running a server
 ```rust
@@ -149,7 +157,7 @@ let logger = /* Arc<dyn Logger> */ todo!();
 server
     .start(
         Arc::new(ChatFactory),
-        Arc::new(Echo),
+        Echo, // callback passed by value; must be Clone
         app_states,
         logger,
     )
@@ -192,7 +200,7 @@ let logger = /* Arc<dyn Logger> */ todo!();
 client
     .start::<Chat, ChatSerializer, ChatState, ChatFactory, Echo>(
         Arc::new(ChatFactory),
-        Arc::new(Echo),
+        Echo, // callback passed by value; single instance per client
         logger,
     )
     .await;
@@ -222,7 +230,7 @@ let logger = /* Arc<dyn Logger> */ todo!();
 unix_server
     .start(
         Arc::new(ChatFactory),
-        Arc::new(Echo),
+        Echo, // callback passed by value; must be Clone
         app_states,
         logger,
     )
