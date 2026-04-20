@@ -19,3 +19,4 @@ my-tls = { tag = "0.1.5", git = "https://github.com/MyJetTools/my-tls.git", opti
 tokio = { version = "*", features = ["full"] }
 tokio-util = "*"
 async-trait = "*"
+futures = "*"

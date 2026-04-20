@@ -11,25 +11,26 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback, TSer
     tcp_stream: MaybeTlsReadStream,
     connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializerState>>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
-    socket_callback: Arc<TSocketCallback>,
+    socket_callback: &mut TSocketCallback,
     seconds_to_ping: usize,
     serializer: TSerializer,
     serializer_state: TSerializerState,
-) where
+)
+    where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializerState>,
     TSerializerState: TcpSerializerState<TContract> + Send + Sync + 'static,
     TSocketCallback:
-        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send +  'static,
 {
     if !crate::tcp_connection::read_loop::execute_on_connected(
         &connection,
-        &socket_callback,
+        socket_callback,
         &logger,
     )
     .await
     {
-        return;
+        return ;
     }
 
     tokio::spawn(super::dead_connection_detector::start(
@@ -45,19 +46,21 @@ pub async fn handle_new_connection<TContract, TSerializer, TSocketCallback, TSer
     crate::tcp_connection::read_loop::start(
         socket_reader,
         &connection,
-        &socket_callback,
+        socket_callback,
         serializer,
         serializer_state,
         logger.clone(),
     )
     .await;
+
     connection.update_read_thread_status(TcpThreadStatus::Finished);
     connection.threads_statistics.read_threads.decrease();
 
     crate::tcp_connection::read_loop::execute_on_disconnected(
         &connection,
-        &socket_callback,
+        socket_callback,
         &logger,
     )
     .await;
+
 }

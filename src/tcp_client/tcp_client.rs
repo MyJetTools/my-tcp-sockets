@@ -80,7 +80,7 @@ impl TcpClient {
     >(
         &self,
         serializer_metadata_factory: Arc<TTcpSerializerStateFactory>,
-        socket_callback: Arc<TSocketCallback>,
+        socket_callback: TSocketCallback,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
         TContract: TcpContract + Send + Sync + 'static,
@@ -92,7 +92,6 @@ impl TcpClient {
             + 'static,
         TSocketCallback: SocketEventCallback<TContract, TSerializer, TSerializationMetadata>
             + Send
-            + Sync
             + 'static,
     {
         let handle = tokio::spawn(super::connection_loop(

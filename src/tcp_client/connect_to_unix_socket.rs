@@ -19,18 +19,19 @@ pub async fn connect_to_unix_socket<
     unix_socket_addr: &str,
     connection_id: i32,
     inner: &TcpClientInner,
-    socket_callback: &Arc<TSocketCallback>,
+    socket_callback: &mut TSocketCallback,
     serializer_factory: &Arc<TSerializerMetadataFactory>,
     logger: &Arc<dyn Logger + Send + Sync + 'static>,
     socket_context: HashMap<String, String>,
-) where
+) 
+where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializerState>,
     TSerializerState: TcpSerializerState<TContract> + Send + Sync + 'static,
     TSerializerMetadataFactory:
         TcpSerializerFactory<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
     TSocketCallback:
-        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + 'static,
 {
     let unix_socket = rust_extensions::file_utils::format_path(unix_socket_addr);
 
@@ -55,7 +56,7 @@ pub async fn connect_to_unix_socket<
                 format!("Can not connect to {}. Reason: {}", unix_socket, err),
                 Some(socket_context.clone()),
             );
-            return;
+            return; 
         }
     };
 
@@ -88,7 +89,7 @@ pub async fn connect_to_unix_socket<
         read_socket.into(),
         connection,
         logger.clone(),
-        socket_callback.clone(),
+        socket_callback,
         inner.seconds_to_ping,
         serializer_factory.create_serializer().await,
         serializer_factory.create_serializer_state().await,

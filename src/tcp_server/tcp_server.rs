@@ -42,7 +42,7 @@ impl TcpServer {
     >(
         &self,
         serializer_metadata_factory: Arc<TTcpSerializerStateFactory>,
-        socket_callback: Arc<TSocketCallback>,
+        socket_callback: TSocketCallback,
         app_states: Arc<dyn ApplicationStates + Send + Sync + 'static>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) where
@@ -52,12 +52,12 @@ impl TcpServer {
         TTcpSerializerStateFactory:
             TcpSerializerFactory<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
         TSocketCallback:
-            SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
+            SocketEventCallback<TContract, TSerializer, TSerializerState> + Send +  Clone+ 'static,
     {
         let threads_statistics = self.threads_statistics.clone();
         tokio::spawn(super::accept_tcp_connections_loop(
             self.addr,
-            socket_callback.clone(),
+            socket_callback,
             self.name.clone(),
             self.max_send_payload_size,
             self.send_timeout,

@@ -20,7 +20,7 @@ pub async fn handle_new_connection<
     master_socket_name: Arc<String>,
     tcp_stream: TcpStream,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
-    socket_callback: Arc<TSocketCallback>,
+    mut socket_callback: TSocketCallback,
     connection_id: ConnectionId,
     socket_addr: SocketAddr,
     threads_statistics: &Arc<ThreadsStatistics>,
@@ -34,7 +34,7 @@ pub async fn handle_new_connection<
     TTcpSerializerStateFactory:
         TcpSerializerFactory<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
     TSocketCallback:
-        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + 'static,
 {
     let (read_half, write_half) = tcp_stream.into_split();
 
@@ -67,7 +67,7 @@ pub async fn handle_new_connection<
         TSerializer,
         TSerializerState,
         TSocketCallback,
-    >(&connection, &socket_callback, &logger)
+    >(&connection, &mut socket_callback, &logger)
     .await
     {
         connection.disconnect().await;
@@ -87,7 +87,7 @@ pub async fn handle_new_connection<
     >(
         socket_reader,
         &connection,
-        &socket_callback,
+        &mut socket_callback,
         serializer_factory.create_serializer().await,
         serializer_factory.create_serializer_state().await,
         logger.clone(),
@@ -98,7 +98,7 @@ pub async fn handle_new_connection<
 
     crate::tcp_connection::read_loop::execute_on_disconnected(
         &connection,
-        &socket_callback,
+        &mut socket_callback,
         &logger,
     )
     .await;

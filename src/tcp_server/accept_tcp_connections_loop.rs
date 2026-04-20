@@ -18,7 +18,7 @@ pub async fn accept_tcp_connections_loop<
     TSocketCallback,
 >(
     addr: SocketAddr,
-    socket_callback: Arc<TSocketCallback>,
+    socket_callback: TSocketCallback,
     context_name: Arc<String>,
     max_send_payload_size: usize,
     send_timeout: Duration,
@@ -33,7 +33,7 @@ pub async fn accept_tcp_connections_loop<
     TTcpSerializerStateFactory:
         TcpSerializerFactory<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
     TSocketCallback:
-        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Clone+ 'static,
 {
     while !app_states.is_initialized() {
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -61,12 +61,12 @@ pub async fn accept_tcp_connections_loop<
                 //log_context.insert("ServerSocketName".to_string(), context_name.to_string());
 
                 let logger_spawned = logger.clone();
-                let socket_callback = socket_callback.clone();
                 let threads_statistics = threads_statistics.clone();
                 let context_name = context_name.clone();
                 let serializer_metadata_factory = serializer_metadata_factory.clone();
 
                 let connection_id = crate::CURRENT_CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let socket_callback_spawned = socket_callback.clone();
                 tokio::task::spawn(async move {
                     threads_statistics.read_threads.increase();
 
@@ -74,7 +74,7 @@ pub async fn accept_tcp_connections_loop<
                         context_name,
                         tcp_stream,
                         logger_spawned,
-                        socket_callback,
+                        socket_callback_spawned,
                         connection_id,
                         socket_addr,
                         &threads_statistics,

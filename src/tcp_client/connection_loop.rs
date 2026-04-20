@@ -19,7 +19,7 @@ pub async fn connection_loop<
     inner: TcpClientInner,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     serializer_factory: Arc<TSerializerMetadataFactory>,
-    socket_callback: Arc<TSocketCallback>,
+    mut socket_callback: TSocketCallback,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
     TSerializer: Send + Sync + 'static + TcpSocketSerializer<TContract, TSerializerState>,
@@ -27,7 +27,7 @@ pub async fn connection_loop<
     TSerializerMetadataFactory:
         TcpSerializerFactory<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
     TSocketCallback:
-        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + Sync + 'static,
+        SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + 'static,
 {
     let mut connection_id: ConnectionId = 0;
 
@@ -59,7 +59,7 @@ pub async fn connection_loop<
                 host_port.as_str(),
                 connection_id,
                 &inner,
-                &socket_callback,
+                &mut socket_callback,
                 &serializer_factory,
                 &logger,
                 socket_context,
@@ -76,11 +76,11 @@ pub async fn connection_loop<
                 Some(socket_context.clone()),
             );
         } else {
-            super::connect_to_tcp_socket(
+             super::connect_to_tcp_socket(
                 &host_port,
                 connection_id,
                 &inner,
-                &socket_callback,
+                &mut socket_callback,
                 &serializer_factory,
                 &logger,
                 socket_context,

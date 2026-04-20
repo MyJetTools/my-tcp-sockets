@@ -12,17 +12,17 @@ pub trait SocketEventCallback<
 >
 {
     async fn connected(
-        &self,
+        &mut self,
         connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     );
 
     async fn disconnected(
-        &self,
+        &mut self,
         connection: Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
     );
 
     async fn payload(
-        &self,
+        &mut self,
         connection: &Arc<TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>>,
         contract: TContract,
     );
