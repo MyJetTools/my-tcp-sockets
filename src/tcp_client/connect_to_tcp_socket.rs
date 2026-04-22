@@ -64,12 +64,48 @@ pub async fn connect_to_tcp_socket<
         Some(socket_context.clone()),
     );
 
-    let (read_socket, write_socket) = tcp_stream.into_split();
+    #[cfg(feature = "with-tls")]
+    let (read_socket, write_socket): (crate::MaybeTlsReadStream, crate::MaybeTlsWriteStream) =
+        if let Some(tls_settings) = inner.settings.get_tls_settings().await {
+            let tls_stream = super::do_handshake(
+                inner.name.as_str(),
+                tcp_stream,
+                tls_settings.server_name,
+            )
+            .await;
+
+            let tls_stream = match tls_stream {
+                Ok(s) => s,
+                Err(err) => {
+                    logger.write_error(
+                        LOG_PROCESS.to_string(),
+                        format!("TLS handshake failed for {}. Reason: {}", host_port, err),
+                        Some(socket_context.clone()),
+                    );
+                    return;
+                }
+            };
+
+            let (read, write) = tokio::io::split(tls_stream);
+            (
+                crate::MaybeTlsReadStream::Tls(read),
+                crate::MaybeTlsWriteStream::Tls(write),
+            )
+        } else {
+            let (read, write) = tcp_stream.into_split();
+            (read.into(), write.into())
+        };
+
+    #[cfg(not(feature = "with-tls"))]
+    let (read_socket, write_socket): (crate::MaybeTlsReadStream, crate::MaybeTlsWriteStream) = {
+        let (read, write) = tcp_stream.into_split();
+        (read.into(), write.into())
+    };
 
     let connection = Arc::new(
         TcpSocketConnection::new(
             inner.name.clone(),
-            Some(write_socket.into()),
+            Some(write_socket),
             connection_id,
             None,
             logger.clone(),
@@ -84,7 +120,7 @@ pub async fn connect_to_tcp_socket<
     );
 
     super::handle_new_connection(
-        read_socket.into(),
+        read_socket,
         connection,
         logger.clone(),
         socket_callback,

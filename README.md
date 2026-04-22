@@ -214,6 +214,9 @@ client.stop().await;
 
 **Note**: If `get_host_port()` returns `None`, the client will skip that connection attempt and retry after `reconnect_timeout`. This is useful for dynamic configuration where the endpoint might not be available yet.
 
+### TLS on the client (feature `with-tls`)
+When `get_tls_settings()` returns `Some(TlsSettings { server_name })`, the client performs a rustls TLS handshake over the freshly opened TCP stream (using the bundled root certificate store from `my_tls::ROOT_CERT_STORE`) and wraps the read/write halves as `MaybeTls{Read,Write}Stream::Tls`. Handshake failures are logged and the reconnect loop retries after `reconnect_timeout`. Returning `None` keeps the connection plain TCP. TLS requires the `with-tls` feature; without it `get_tls_settings()` is ignored at build time.
+
 ## Unix Domain Socket Server (Unix only)
 ```rust
 use std::sync::Arc;
