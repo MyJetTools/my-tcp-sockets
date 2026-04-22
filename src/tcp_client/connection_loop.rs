@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 use std::sync::Arc;
-
 use rust_extensions::Logger;
 
-use crate::{ConnectionId, SocketEventCallback, TcpSocketSerializer};
+use crate::{ SocketEventCallback, TcpSocketSerializer};
 use crate::{TcpContract, TcpSerializerFactory, TcpSerializerState};
 
 use super::*;
+
 
 pub async fn connection_loop<
     TContract,
@@ -29,13 +29,12 @@ pub async fn connection_loop<
     TSocketCallback:
         SocketEventCallback<TContract, TSerializer, TSerializerState> + Send + 'static,
 {
-    let mut connection_id: ConnectionId = 0;
 
     let mut socket_context: HashMap<String, String> = HashMap::new();
     socket_context.insert("SocketName".to_string(), inner.name.to_string());
 
     loop {
-        connection_id += 1;
+        let connection_id = crate::CURRENT_CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         tokio::time::sleep(inner.re_connect_timeout).await;
 
         let host_port = inner.settings.get_host_port().await;
