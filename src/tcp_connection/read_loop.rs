@@ -45,12 +45,12 @@ pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallba
             }
         },
         Err(err) =>{
-            logger.write_debug_info(
+            logger.write_fatal_error(
                 "Socket Read Loop".to_string(),
-                format!("Socket Read loop exited with error: {:?}", err),
+                format!("Socket Read loop exited with panic: {:?}", err),
                 Some(connection.get_log_context().await),
             );
-     
+
         },
     };
 }
