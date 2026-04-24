@@ -85,7 +85,7 @@ where
            socket_callback.payload(&connection, contract).await; 
         }else{
         if connection.next_packet_synch.has_data(){
-            if let Some(mut tc) = connection.next_packet_synch.get_task_completion(){
+            if let Some(mut tc) = connection.next_packet_synch.get_task_completion(&contract){
                 tc.set_ok(contract);
             }
             }else{

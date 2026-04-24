@@ -47,31 +47,47 @@ impl From<i32> for TcpThreadStatus {
     }
 }
 
+
 pub struct NextPacketSync<TContract>{
-    items: Mutex<Vec<TaskCompletion<TContract, String>>>,
+    pub task : TaskCompletion<TContract, String>,
+    pub is_my_type: Box<fn(&TContract)->bool>
+}
+
+pub struct NextPacketSyncList<TContract>{
+    items: Mutex<Vec<NextPacketSync<TContract>>>,
     has_data: AtomicBool,
 }
 
-impl<TContract> Default for NextPacketSync<TContract>{
+impl<TContract> Default for NextPacketSyncList<TContract>{
     fn default() -> Self {
         Self { items: Default::default(), has_data: Default::default() }
     }
 }
 
-impl<TContract> NextPacketSync<TContract>{
+impl<TContract> NextPacketSyncList<TContract>{
     pub fn has_data(&self)->bool{
         self.has_data.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn get_task_completion(&self)->Option<TaskCompletion<TContract, String>>{
+    pub fn get_task_completion(&self, contract: &TContract)->Option<TaskCompletion<TContract, String>>{
         let mut write_access = self.items.lock();
 
-        let next_item = write_access.pop();
+        if let Some(item)  = write_access.first(){
+            let fun = item.is_my_type.as_ref();
+            if !fun(contract){
+                return None;
+            }
+        }else{
+            return None;
+        }
+
+        let next_item = write_access.pop()?;
 
         if write_access.len() == 0{
             self.has_data.store(false, std::sync::atomic::Ordering::Relaxed);
         }
-        next_item
+
+        Some(next_item.task)
     }
 
 }
@@ -85,7 +101,7 @@ where
 {
     pub id: ConnectionId,
     inner: Arc<TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>>,
-    pub (crate) next_packet_synch: NextPacketSync<TContract>,
+    pub (crate) next_packet_synch: NextPacketSyncList<TContract>,
     pub addr: Option<SocketAddress>,
     pub dead_disconnect_timeout: Duration,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
@@ -187,7 +203,7 @@ impl<
         self.inner.push_contract(contract)
     }
 
-    pub async fn send_and_await_next_payload(&self, contract: &TContract) -> Result<TContract, String> {
+    pub async fn send_and_await_next_payload(&self, contract: &TContract, is_my_type: Box<fn(&TContract)->bool>) -> Result<TContract, String> {
         if !self.inner.is_connected() {
             return Err("Not Connected".to_string());
         }
@@ -198,7 +214,7 @@ impl<
         let awaiter = tc.get_awaiter();
 
         let mut sync_access = self.next_packet_synch.items.lock();
-        sync_access.push(tc);
+        sync_access.push(NextPacketSync { task:tc, is_my_type});
         self.next_packet_synch.has_data.store(true, std::sync::atomic::Ordering::Relaxed);
         self.inner.push_contract(contract);
         drop(sync_access);
