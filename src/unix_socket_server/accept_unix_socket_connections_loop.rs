@@ -74,7 +74,7 @@ pub async fn accept_unix_socket_connections_loop<
                 let context_name = context_name.clone();
                 let serializer_metadata_factory = serializer_metadata_factory.clone();
 
-                let connection_id = crate::CURRENT_CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let connection_id = crate::CURRENT_CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 let socket_callback = socket_callback.clone();
                 tokio::task::spawn(async move {
                     threads_statistics.read_threads.increase();

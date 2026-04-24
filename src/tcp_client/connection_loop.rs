@@ -34,7 +34,7 @@ pub async fn connection_loop<
     socket_context.insert("SocketName".to_string(), inner.name.to_string());
 
     loop {
-        let connection_id = crate::CURRENT_CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let connection_id = crate::CURRENT_CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         tokio::time::sleep(inner.re_connect_timeout).await;
 
         let host_port = inner.settings.get_host_port().await;
