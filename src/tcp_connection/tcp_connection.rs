@@ -106,9 +106,9 @@ impl<
 
         threads_statistics.connections_objects.increase();
 
-        events_loop.register_event_loop(inner.clone()).await;
+        events_loop.register_event_loop(inner.clone());
 
-        events_loop.start(Arc::new(TcpConnectionStates::default()), logger.clone()).await;
+        events_loop.start(Arc::new(TcpConnectionStates::default()), logger.clone());
 
         Self {
             id,
