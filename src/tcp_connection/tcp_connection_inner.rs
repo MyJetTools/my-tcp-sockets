@@ -1,11 +1,11 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicI32, Arc},
+    sync::{Arc, atomic::{AtomicBool, AtomicI32}},
 };
 
 use rust_extensions::{
     events_loop::{EventsLoopPublisher, EventsLoopTick},
-    Logger, UnsafeValue,
+    Logger, 
 };
 use tokio::sync::Mutex;
 
@@ -23,7 +23,7 @@ pub struct TcpConnectionInner<
     pub stream: Mutex<TcpConnectionStream>,
     pub buffer_to_send_inner: Mutex<BufferToSendWrapper<TContract, TSerializer, TSerializerState>>,
     max_send_payload_size: usize,
-    connected: UnsafeValue<bool>,
+    connected: AtomicBool,
     pub statistics: ConnectionStatistics,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub threads_statistics: Arc<crate::ThreadsStatistics>,
@@ -205,7 +205,7 @@ impl<
         };
 
         if just_disconnected {
-            self.connected.set_value(false);
+            self.connected.store(false, std::sync::atomic::Ordering::Relaxed);
             self.statistics.disconnect();
         }
 
@@ -221,7 +221,7 @@ impl<
     }
 
     pub fn is_connected(&self) -> bool {
-        self.connected.get_value()
+        self.connected.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub async fn get_log_context(&self) -> HashMap<String, String> {
