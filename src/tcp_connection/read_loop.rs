@@ -3,9 +3,7 @@ use futures::FutureExt;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, Logger};
 
 use crate::{
-    socket_reader::{ReadingTcpContractFail, SocketReaderTcpStream},
-    tcp_connection::TcpSocketConnection,
-    SocketEventCallback, TcpContract, TcpSerializerState, TcpSocketSerializer,
+    SocketEventCallback, TcpContract, TcpSerializerState, TcpSocketSerializer, socket_reader::{ReadingTcpContractFail, SocketReaderTcpStream}, tcp_connection::{ TcpSocketConnection}
 };
 
 pub async fn start<TContract, TSerializer, TSerializationMetadata, TSocketCallback>(
@@ -83,7 +81,21 @@ where
             connection.update_incoming_packet_to_state(&contract);
         }
 
-        socket_callback.payload(&connection, contract).await;
+        if contract.is_ping() || contract.is_pong(){
+           socket_callback.payload(&connection, contract).await; 
+        }else{
+        if connection.next_packet_synch.has_data(){
+            if let Some(mut tc) = connection.next_packet_synch.get_task_completion(){
+                tc.set_ok(contract);
+            }
+            }else{
+               socket_callback.payload(&connection, contract).await;
+            }
+        }
+
+
+
+        
     }
 }
 

@@ -1,13 +1,10 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use rust_extensions::Logger;
+use rust_extensions::{Logger};
 use tokio::net::TcpStream;
 
 use crate::{
-    socket_reader::SocketReaderTcpStream,
-    tcp_connection::{TcpSocketConnection, TcpThreadStatus},
-    ConnectionId, SocketEventCallback, TcpContract, TcpSerializerFactory, TcpSerializerState,
-    TcpSocketSerializer, ThreadsStatistics,
+    ConnectionId, SocketEventCallback, TcpContract, TcpSerializerFactory, TcpSerializerState, TcpSocketSerializer, ThreadsStatistics, socket_reader::SocketReaderTcpStream, tcp_connection::{TcpSocketConnection, TcpThreadStatus}
 };
 
 pub async fn handle_new_connection<
@@ -44,6 +41,7 @@ pub async fn handle_new_connection<
     let write_half = crate::MaybeTlsWriteStream::NoTls(write_half);
 
     let socket_reader = SocketReaderTcpStream::new(read_half.into());
+
 
     let connection = TcpSocketConnection::new(
         master_socket_name,

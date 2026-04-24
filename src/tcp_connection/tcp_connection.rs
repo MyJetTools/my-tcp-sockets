@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use rust_extensions::Logger;
+use parking_lot::Mutex;
+use rust_extensions::{Logger, TaskCompletion};
 use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop};
 
 use crate::{
-    ConnectionId, MaybeTlsWriteStream, SocketAddress, TcpSerializerState, TcpSocketSerializer,
+    ConnectionId, MaybeTlsWriteStream, SocketAddress,  TcpSerializerState, TcpSocketSerializer
 };
 
 use super::{
@@ -45,6 +47,36 @@ impl From<i32> for TcpThreadStatus {
     }
 }
 
+pub struct NextPacketSync<TContract>{
+    items: Mutex<Vec<TaskCompletion<TContract, String>>>,
+    has_data: AtomicBool,
+}
+
+impl<TContract> Default for NextPacketSync<TContract>{
+    fn default() -> Self {
+        Self { items: Default::default(), has_data: Default::default() }
+    }
+}
+
+impl<TContract> NextPacketSync<TContract>{
+    pub fn has_data(&self)->bool{
+        self.has_data.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_task_completion(&self)->Option<TaskCompletion<TContract, String>>{
+        let mut write_access = self.items.lock();
+
+        let next_item = write_access.pop();
+
+        if write_access.len() == 0{
+            self.has_data.store(false, std::sync::atomic::Ordering::Relaxed);
+        }
+        next_item
+    }
+
+}
+
+
 pub struct TcpSocketConnection<TContract, TSerializer, TSerializationMetadata>
 where
     TContract: Send + Sync + 'static,
@@ -53,7 +85,7 @@ where
 {
     pub id: ConnectionId,
     inner: Arc<TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>>,
-
+    pub (crate) next_packet_synch: NextPacketSync<TContract>,
     pub addr: Option<SocketAddress>,
     pub dead_disconnect_timeout: Duration,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
@@ -72,6 +104,7 @@ impl<
         socket: Option<MaybeTlsWriteStream>,
         id: ConnectionId,
         addr: Option<SocketAddress>,
+
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         max_send_payload_size: usize,
         send_timeout: Duration,
@@ -118,6 +151,7 @@ impl<
             dead_disconnect_timeout,
             threads_statistics,
             events_loop,
+            next_packet_synch: Default::default()
         }
     }
 
@@ -151,6 +185,26 @@ impl<
         }
 
         self.inner.push_contract(contract)
+    }
+
+    pub async fn send_and_await_next_payload(&self, contract: &TContract) -> Result<TContract, String> {
+        if !self.inner.is_connected() {
+            return Err("Not Connected".to_string());
+        }
+
+
+        let mut tc: TaskCompletion<TContract, String> = TaskCompletion::new();
+
+        let awaiter = tc.get_awaiter();
+
+        let mut sync_access = self.next_packet_synch.items.lock();
+        sync_access.push(tc);
+        self.next_packet_synch.has_data.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.inner.push_contract(contract);
+        drop(sync_access);
+
+        awaiter.get_result().await
+        
     }
 
     pub fn send_many(&self, contracts: &[TContract]) -> usize {

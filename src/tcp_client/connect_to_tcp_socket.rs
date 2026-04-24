@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use rust_extensions::Logger;
 
-use crate::tcp_connection::TcpSocketConnection;
+use crate::tcp_connection::{ TcpSocketConnection};
 use crate::{SocketEventCallback, TcpClientInner, TcpSocketSerializer};
 use crate::{TcpContract, TcpSerializerFactory, TcpSerializerState};
 
@@ -101,6 +101,7 @@ pub async fn connect_to_tcp_socket<
         let (read, write) = tcp_stream.into_split();
         (read.into(), write.into())
     };
+
 
     let connection = Arc::new(
         TcpSocketConnection::new(
