@@ -20,3 +20,4 @@ tokio = { version = "*", features = ["full"] }
 tokio-util = "*"
 async-trait = "*"
 futures = "*"
+parking_lot = "*"

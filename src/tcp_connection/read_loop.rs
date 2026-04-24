@@ -80,7 +80,7 @@ where
 
         if meta_data.is_tcp_contract_related_to_metadata(&contract) {
             meta_data.apply_tcp_contract(&contract);
-            connection.update_incoming_packet_to_state(&contract).await;
+            connection.update_incoming_packet_to_state(&contract);
         }
 
         socket_callback.payload(&connection, contract).await;

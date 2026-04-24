@@ -145,27 +145,27 @@ impl<
         self.inner.get_write_thread_status()
     }
 
-    pub async fn send(&self, contract: &TContract) -> usize {
+    pub fn send(&self, contract: &TContract) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.push_contract(contract).await
+        self.inner.push_contract(contract)
     }
 
-    pub async fn send_many(&self, contracts: &[TContract]) -> usize {
+    pub fn send_many(&self, contracts: &[TContract]) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
-        self.inner.push_many_contracts(contracts).await
+        self.inner.push_many_contracts(contracts)
     }
 
-    pub async fn send_bytes(&self, payload: &[u8]) -> usize {
+    pub fn send_bytes(&self, payload: &[u8]) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.push_payload(payload).await
+        self.inner.push_payload(payload)
     }
 
     pub async fn set_connection_name(&self, name: String) {
@@ -173,12 +173,12 @@ impl<
         write_access.set_connection_name(name);
     }
 
-    pub async fn send_ping(&self) -> usize {
+    pub fn send_ping(&self) -> usize {
         if !self.inner.is_connected() {
             return 0;
         }
 
-        self.inner.send_ping().await
+        self.inner.send_ping()
     }
 
     pub fn statistics(&self) -> &super::ConnectionStatistics {
@@ -193,8 +193,8 @@ impl<
         silence_duration > self.dead_disconnect_timeout
     }
 
-    pub async fn update_incoming_packet_to_state(&self, contract: &TContract) {
-        let mut write_access = self.inner.buffer_to_send_inner.lock().await;
+    pub fn update_incoming_packet_to_state(&self, contract: &TContract) {
+        let mut write_access = self.inner.buffer_to_send_inner.lock();
 
         write_access
             .serializer_state

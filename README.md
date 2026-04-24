@@ -118,7 +118,7 @@ impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
         &mut self,
         connection: Arc<TcpSocketConnection<Chat, ChatSerializer, ChatState>>,
     ) {
-        connection.send(&Chat { text: "hello".into() }).await;
+        connection.send(&Chat { text: "hello".into() });
     }
 
     async fn payload(
@@ -127,7 +127,7 @@ impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
         contract: Chat,
     ) {
         // Echo back every message
-        connection.send(&contract).await;
+        connection.send(&contract);
     }
 
     async fn disconnected(
@@ -252,11 +252,11 @@ let messages = vec![
     Chat { text: "msg2".into() },
     Chat { text: "msg3".into() },
 ];
-let sent_count = connection.send_many(&messages).await;
+let sent_count = connection.send_many(&messages);
 
 // Send raw bytes (bypasses serializer)
 let raw_data = b"raw bytes";
-connection.send_bytes(raw_data).await;
+connection.send_bytes(raw_data);
 ```
 
 ### Connection statistics
@@ -292,10 +292,10 @@ impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
         contract: Chat,
     ) {
         // Manually update state if needed (usually automatic)
-        connection.update_incoming_packet_to_state(&contract).await;
+        connection.update_incoming_packet_to_state(&contract);
         
         // Process the message
-        connection.send(&contract).await;
+        connection.send(&contract);
     }
 }
 ```

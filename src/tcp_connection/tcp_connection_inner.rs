@@ -21,7 +21,7 @@ pub struct TcpConnectionInner<
     TSerializerState: TcpSerializerState<TContract> + Send + Sync + 'static,
 > {
     pub stream: Mutex<TcpConnectionStream>,
-    pub buffer_to_send_inner: Mutex<BufferToSendWrapper<TContract, TSerializer, TSerializerState>>,
+    pub buffer_to_send_inner: parking_lot::Mutex<BufferToSendWrapper<TContract, TSerializer, TSerializerState>>,
     max_send_payload_size: usize,
     connected: AtomicBool,
     pub statistics: ConnectionStatistics,
@@ -48,7 +48,7 @@ impl<
     ) -> Self {
         Self {
             stream: Mutex::new(stream),
-            buffer_to_send_inner: Mutex::new(BufferToSendWrapper::new(
+            buffer_to_send_inner: parking_lot::Mutex::new(BufferToSendWrapper::new(
                 serializer,
                 serializer_state,
                 events_loop_publisher,
@@ -85,8 +85,8 @@ impl<
             .into()
     }
 
-    pub async fn push_contract(&self, contract: &TContract) -> usize {
-        let mut write_access = self.buffer_to_send_inner.lock().await;
+    pub fn push_contract(&self, contract: &TContract) -> usize {
+        let mut write_access = self.buffer_to_send_inner.lock();
 
         let serializer = write_access.serializer.take().unwrap();
 
@@ -102,8 +102,8 @@ impl<
         result
     }
 
-    pub async fn push_many_contracts(&self, contracts: &[TContract]) -> usize {
-        let mut write_access = self.buffer_to_send_inner.lock().await;
+    pub fn push_many_contracts(&self, contracts: &[TContract]) -> usize {
+        let mut write_access = self.buffer_to_send_inner.lock();
 
         let serializer = write_access.serializer.take().unwrap();
         let serializer_state = write_access.serializer_state.take().unwrap();
@@ -120,8 +120,8 @@ impl<
 
         result
     }
-    pub async fn send_ping(&self) -> usize {
-        let mut write_access = self.buffer_to_send_inner.lock().await;
+    pub fn send_ping(&self) -> usize {
+        let mut write_access = self.buffer_to_send_inner.lock();
 
         let serializer = write_access.serializer.take().unwrap();
 
@@ -140,8 +140,8 @@ impl<
         result
     }
 
-    pub async fn push_payload(&self, payload: &[u8]) -> usize {
-        let mut write_access = self.buffer_to_send_inner.lock().await;
+    pub fn push_payload(&self, payload: &[u8]) -> usize {
+        let mut write_access = self.buffer_to_send_inner.lock();
 
         
 
@@ -152,7 +152,7 @@ impl<
 
     pub async fn push_send_buffer_to_connection(&self) {
         let payload_to_send = {
-            let mut inner = self.buffer_to_send_inner.lock().await;
+            let mut inner = self.buffer_to_send_inner.lock();
 
             if let Some(buffer_to_send) = &mut inner.buffer_to_send {
                 buffer_to_send.get_payload()
@@ -190,7 +190,7 @@ impl<
         if connection_has_error {
             self.disconnect().await;
         } else {
-            let mut inner = self.buffer_to_send_inner.lock().await;
+            let mut inner = self.buffer_to_send_inner.lock();
             if let Some(buffer_to_send) = &mut inner.buffer_to_send {
                 buffer_to_send.reuse_payload(payload_to_send);
             }
@@ -210,7 +210,7 @@ impl<
         }
 
         {
-            let mut inner = self.buffer_to_send_inner.lock().await;
+            let mut inner = self.buffer_to_send_inner.lock();
             inner.buffer_to_send = None;
             if let Some(events_loop_publisher) = inner.events_loop_publisher.take() {
                 events_loop_publisher.stop();
