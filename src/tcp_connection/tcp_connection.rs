@@ -72,18 +72,14 @@ impl<TContract> NextPacketSyncList<TContract>{
     pub fn get_task_completion(&self, contract: &TContract)->Option<TaskCompletion<TContract, String>>{
         let mut write_access = self.items.lock();
 
-        if let Some(item)  = write_access.first(){
-            let fun = item.is_my_type.as_ref();
-            if !fun(contract){
-                return None;
-            }
-        }else{
+        let item = write_access.first()?;
+        if !(item.is_my_type)(contract) {
             return None;
         }
 
-        let next_item = write_access.pop()?;
+        let next_item = write_access.remove(0);
 
-        if write_access.len() == 0{
+        if write_access.is_empty() {
             self.has_data.store(false, std::sync::atomic::Ordering::Relaxed);
         }
 
@@ -203,7 +199,7 @@ impl<
         self.inner.push_contract(contract)
     }
 
-    pub async fn send_and_await_next_payload(&self, contract: &TContract, is_my_type: impl Fn(&TContract)->bool + Send + Sync + 'static) -> Result<TContract, String> {
+    async fn send_and_await_next_payload_inner(&self, contract: &TContract, is_my_type: impl Fn(&TContract)->bool + Send + Sync + 'static) -> Result<TContract, String> {
         if !self.inner.is_connected() {
             return Err("Not Connected".to_string());
         }
@@ -220,7 +216,19 @@ impl<
         drop(sync_access);
 
         awaiter.get_result().await
-        
+    }
+
+    pub async fn send_and_await_next_payload(&self, contract: &TContract, timeout: Duration, is_my_type: impl Fn(&TContract)->bool + Send + Sync + 'static) -> Result<TContract, String> {
+
+        let execute_future = self.send_and_await_next_payload_inner(contract, is_my_type);
+
+        match tokio::time::timeout(timeout, execute_future).await {
+            Ok(result) => result,
+            Err(_) => {
+                self.disconnect().await;
+                Err("send_and_await_next_payload Timeout execution".to_string())
+            }
+        }
     }
 
     pub fn send_many(&self, contracts: &[TContract]) -> usize {

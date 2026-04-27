@@ -259,6 +259,39 @@ let raw_data = b"raw bytes";
 connection.send_bytes(raw_data);
 ```
 
+### Request/response: send and await matching reply
+`send_and_await_next_payload` sends a contract and asynchronously waits — up to a `timeout` — for the next incoming payload that matches a closure predicate. The closure receives `&TContract` and returns `bool`; only the payload for which it returns `true` resolves the awaiter.
+
+```rust
+use std::time::Duration;
+
+// Assume Chat carries a correlation id (e.g. text "REQ:42" / "RSP:42")
+let request = Chat { text: "REQ:42".into() };
+
+let response = connection
+    .send_and_await_next_payload(
+        &request,
+        Duration::from_secs(5),
+        |incoming: &Chat| {
+            // Closure runs against the head awaiter for each incoming contract.
+            incoming.text == "RSP:42"
+        },
+    )
+    .await;
+
+match response {
+    Ok(reply) => println!("got reply: {}", reply.text),
+    Err(err)  => eprintln!("await failed: {err}"), // "Not Connected" | "Timeout"
+}
+```
+
+Notes:
+- The closure must be `Fn(&TContract) -> bool + Send + Sync + 'static` — it is stored on the connection until a matching payload arrives.
+- Only the head awaiter's closure is tested against each incoming payload. If it matches, the awaiter is removed and resolved; queued awaiters behind it wait their turn.
+- If the connection is not currently connected, the call returns `Err("Not Connected")` without sending.
+- If no matching payload arrives within `timeout`, the call returns `Err("Timeout")` **and disconnects the connection** (the reconnect loop on `TcpClient` will then re-establish it).
+- A payload consumed by `send_and_await_next_payload` (head awaiter matched) is delivered **only** to the awaiter — it is **not** forwarded to `SocketEventCallback::payload()`. Ping/pong contracts always bypass the awaiter and go to `payload()`.
+
 ### Connection statistics
 ```rust
 let stats = connection.statistics();
