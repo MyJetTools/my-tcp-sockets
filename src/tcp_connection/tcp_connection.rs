@@ -50,7 +50,7 @@ impl From<i32> for TcpThreadStatus {
 
 pub struct NextPacketSync<TContract>{
     pub task : TaskCompletion<TContract, String>,
-    pub is_my_type: Box<fn(&TContract)->bool>
+    pub is_my_type: Box<dyn Fn(&TContract)->bool + Send + Sync + 'static>
 }
 
 pub struct NextPacketSyncList<TContract>{
@@ -203,7 +203,7 @@ impl<
         self.inner.push_contract(contract)
     }
 
-    pub async fn send_and_await_next_payload(&self, contract: &TContract, is_my_type: Box<fn(&TContract)->bool>) -> Result<TContract, String> {
+    pub async fn send_and_await_next_payload(&self, contract: &TContract, is_my_type: impl Fn(&TContract)->bool + Send + Sync + 'static) -> Result<TContract, String> {
         if !self.inner.is_connected() {
             return Err("Not Connected".to_string());
         }
@@ -214,7 +214,7 @@ impl<
         let awaiter = tc.get_awaiter();
 
         let mut sync_access = self.next_packet_synch.items.lock();
-        sync_access.push(NextPacketSync { task:tc, is_my_type});
+        sync_access.push(NextPacketSync { task:tc, is_my_type: Box::new(is_my_type)});
         self.next_packet_synch.has_data.store(true, std::sync::atomic::Ordering::Relaxed);
         self.inner.push_contract(contract);
         drop(sync_access);
