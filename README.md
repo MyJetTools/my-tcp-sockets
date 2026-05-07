@@ -12,21 +12,40 @@ Async TCP server/client building blocks for Tokio with pluggable serialization, 
 ## Add to Cargo.toml
 ```toml
 [dependencies]
-my-tcp-sockets = { git = "https://github.com/MyJetTools/MyTcpSockets.git", tag = "0.1.12" }
+my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.12" }
 # Enable TLS if needed
-# my-tcp-sockets = { git = "https://github.com/MyJetTools/MyTcpSockets.git", tag = "0.1.12", features = ["with-tls"] }
+# my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.12", features = ["with-tls"] }
 ```
 
 ## Core concepts
-- **`TcpContract`**: Your message type; implement `is_pong()` so the keep-alive can spot pong replies.
-- **`TcpSocketSerializer`**: Serializes contracts to bytes and deserializes from socket reader. Provides `get_ping()` for keep-alive.
-- **`TcpSerializerState`**: Per-connection state that can be updated by incoming contracts. Use `is_tcp_contract_related_to_metadata()` to filter which contracts update state.
+- **`TcpContract`**: Your message type. The trait has a single method — `is_pong(&self) -> bool` — so the keep-alive loop can spot pong replies. **There is no `is_ping()`** on this trait; outgoing pings are produced by the serializer's `get_ping()`.
+- **`TcpSocketSerializer`**: Serializes contracts to bytes and deserializes from a socket reader. Provides `get_ping()` for keep-alive.
+- **`TcpSerializerState`**: Per-connection state that can be updated by incoming contracts. Use `is_tcp_contract_related_to_metadata()` to filter which contracts update state, and `apply_tcp_contract()` to mutate it.
 - **`TcpSerializerFactory`**: Creates serializer and state instances for each new connection.
-- **`SocketEventCallback`**: Async hooks for `connected()`, `payload()`, `disconnected()` events.
+- **`SocketEventCallback`**: Async hooks for `connected()`, `payload()`, `disconnected()` events. All three take `&mut self`.
 - **`TcpServer`**: Accepts incoming TCP connections. Requires `ApplicationStates` and `Logger` from `rust_extensions`.
 - **`TcpClient`**: Connects to a remote server with auto-reconnect. Requires `TcpClientSocketSettings` to provide host/port and optional TLS.
+- **`UnixSocketServer`** (Unix only): Same as `TcpServer` but listens on a Unix Domain Socket.
 - **`TcpWriteBuffer`**: Trait for writing bytes. Provides helpers: `write_byte()`, `write_i32()`, `write_u64()`, `write_byte_array()`, `write_pascal_string()`, etc.
+- **`SocketReader`**: Symmetric read-side trait with matching `read_byte()`, `read_i32()`, `read_byte_array()`, `read_buf()`, etc.
 - **`ConnectionId`** (alias for `i32`): Globally unique identifier assigned per `TcpSocketConnection` from a process-wide counter, so IDs do not repeat across reconnects or across server/client instances inside the same process.
+
+## Important: send helpers are `async fn` — you MUST `.await` them
+
+In this version of the library `send`, `send_many`, `send_bytes`, and `send_ping` are all declared `async fn` and return `usize` (bytes queued; `0` if the connection is closed). They internally lock an async `Mutex` over the outgoing buffer, so calling them without `.await` produces a `Future` that is dropped immediately — **the bytes are never enqueued**. Always `.await`:
+
+```rust
+// CORRECT
+connection.send(&contract).await;
+connection.send_bytes(&payload).await;
+connection.send_many(&batch).await;
+
+// WRONG — Future is dropped, nothing is sent (compiler emits unused_must_use)
+connection.send(&contract);
+connection.send_bytes(&payload);
+```
+
+If you find existing code that calls these without `.await`, treat it as a bug.
 
 ## Minimal protocol example
 ```rust
@@ -62,15 +81,13 @@ impl TcpSocketSerializer<Chat, ChatState> for ChatSerializer {
     fn serialize(&self, out: &mut impl TcpWriteBuffer, contract: &Chat, _state: &ChatState) {
         // TcpWriteBuffer provides many helpers:
         // write_byte(), write_i16(), write_u16(), write_i32(), write_u32(),
-        // write_i64(), write_u64(), write_bool(), write_byte_array(), 
+        // write_i64(), write_u64(), write_bool(), write_byte_array(),
         // write_pascal_string(), serialize_list_of_arrays(), etc.
         out.write_byte_array(contract.text.as_bytes());
     }
 
     fn get_ping(&self) -> Chat {
-        Chat {
-            text: "PING".into(),
-        }
+        Chat { text: "PING".into() }
     }
 
     async fn deserialize<TR: SocketReader + Send + Sync + 'static>(
@@ -102,7 +119,8 @@ impl TcpSerializerFactory<Chat, ChatSerializer, ChatState> for ChatFactory {
 **Serialization helpers**: `TcpWriteBuffer` and `SocketReader` provide symmetric read/write methods for common types. Use `write_byte_array()` / `read_byte_array()` for length-prefixed byte arrays, `write_pascal_string()` for length-prefixed strings (max 255 bytes), or implement custom framing.
 
 ## Handling socket events
-`SocketEventCallback` hooks receive `&mut self`, so your implementation can mutate internal state (counters, caches, per-connection maps) without extra synchronisation.
+
+`SocketEventCallback` hooks all receive `&mut self`, so your implementation can mutate internal state (counters, caches, per-connection maps) without extra synchronisation.
 
 ```rust
 use std::sync::Arc;
@@ -118,7 +136,8 @@ impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
         &mut self,
         connection: Arc<TcpSocketConnection<Chat, ChatSerializer, ChatState>>,
     ) {
-        connection.send(&Chat { text: "hello".into() });
+        // .await is required — see "send helpers are async fn" above.
+        connection.send(&Chat { text: "hello".into() }).await;
     }
 
     async fn payload(
@@ -127,7 +146,7 @@ impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
         contract: Chat,
     ) {
         // Echo back every message
-        connection.send(&contract);
+        connection.send(&contract).await;
     }
 
     async fn disconnected(
@@ -142,6 +161,29 @@ impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
 Callback bounds:
 - `TcpServer` / `UnixSocketServer`: `SocketEventCallback + Send + Clone + 'static` — the server clones the callback per accepted connection.
 - `TcpClient`: `SocketEventCallback + Send + 'static` — the client owns a single callback instance for the reconnect loop. `Sync` is **not** required in either case.
+
+## TcpSocketConnection — full method surface
+
+All of the following are available on `Arc<TcpSocketConnection<...>>` you receive in the callbacks. Methods marked `async` must be `.await`-ed.
+
+| Method | Sig | Notes |
+|--------|-----|-------|
+| `as_i32(&self) -> i32` | sync | Numeric `ConnectionId`. |
+| `is_finished(&self) -> bool` | sync | True after the read/write loops have exited. |
+| `is_connected(&self) -> bool` | sync | False once the socket has dropped. **Always check before sending if you care about delivery**, since a closed connection silently drops outgoing messages. |
+| `disconnect(&self) -> bool` | async | Closes the socket. Returns `true` if it actually transitioned from connected → disconnected. |
+| `send(&self, contract: &TContract) -> usize` | **async** | Serializes through the configured `TcpSocketSerializer`, then enqueues. |
+| `send_many(&self, contracts: &[TContract]) -> usize` | **async** | Batched variant of `send`. |
+| `send_bytes(&self, payload: &[u8]) -> usize` | **async** | Bypasses the serializer; enqueues a pre-encoded frame. |
+| `send_ping(&self) -> usize` | async | Built from the serializer's `get_ping()`. The keep-alive loop calls this for you; you rarely call it manually. |
+| `set_connection_name(&self, name: String)` | async | Updates the human-readable name used in logs. |
+| `update_incoming_packet_to_state(&self, contract: &TContract)` | async | Manually feed an inbound contract into the per-connection `TcpSerializerState`. The library does this automatically when `is_tcp_contract_related_to_metadata` returns `true`. |
+| `get_log_context(&self)` | async | Returns the connection's logging key/value map. |
+| `update_read_thread_status(&self, status)` / `get_read_thread_status(&self)` / `get_write_thread_status(&self)` | sync | Used by the dead-connection detector. |
+| `statistics(&self) -> &ConnectionStatistics` | sync | See "Connection statistics" below. |
+| `is_dead(&self, now: DateTimeAsMicroseconds) -> bool` | sync | True if the dead-connection detector should kill this socket. |
+
+**Note:** there is **no** `send_and_await_next_payload` method in this version. If you need request/response correlation (e.g. correlate a TWIME `NewOrderSingle` with the incoming `ExecutionReport` that has the same `cl_ord_id`), you have to build it yourself: keep a map of `cl_ord_id -> TaskCompletion`, call `connection.send_bytes(&bytes).await` to fire, and have your `payload()` callback complete the awaiter when a matching contract arrives.
 
 ## Running a server
 ```rust
@@ -192,9 +234,9 @@ let client = TcpClient::new(
         tls: None, // or Some(TlsSettings { server_name: "example.com".into() })
     }),
 )
-.set_seconds_to_ping(5)           // Send ping every 5 seconds
-.set_disconnect_timeout(Duration::from_secs(15))  // Disconnect if no data for 15s
-.set_reconnect_timeout(Duration::from_secs(3));  // Wait 3s between reconnect attempts
+.set_seconds_to_ping(5)                            // Send ping every 5 seconds
+.set_disconnect_timeout(Duration::from_secs(15))   // Disconnect if no data for 15s
+.set_reconnect_timeout(Duration::from_secs(3));    // Wait 3s between reconnect attempts
 
 let logger = /* Arc<dyn Logger> */ todo!();
 client
@@ -205,10 +247,10 @@ client
     )
     .await;
 
-// Later: manually disconnect (will auto-reconnect)
+// Later: drop the active socket — the reconnect loop will re-establish it.
 client.try_disconnect_current_connection().await;
 
-// Shutdown client completely
+// Shutdown client completely (no further reconnect attempts).
 client.stop().await;
 ```
 
@@ -217,7 +259,7 @@ client.stop().await;
 ### TLS on the client (feature `with-tls`)
 When `get_tls_settings()` returns `Some(TlsSettings { server_name })`, the client performs a rustls TLS handshake over the freshly opened TCP stream (using the bundled root certificate store from `my_tls::ROOT_CERT_STORE`) and wraps the read/write halves as `MaybeTls{Read,Write}Stream::Tls`. Handshake failures are logged and the reconnect loop retries after `reconnect_timeout`. Returning `None` keeps the connection plain TCP. TLS requires the `with-tls` feature; without it `get_tls_settings()` is ignored at build time.
 
-## Unix Domain Socket Server (Unix only)
+## Unix Domain Socket server (Unix only)
 ```rust
 use std::sync::Arc;
 use my_tcp_sockets::UnixSocketServer;
@@ -246,51 +288,42 @@ Clients can connect to Unix sockets by using a path starting with `/` or `~` in 
 
 ### Sending multiple messages
 ```rust
-// Send multiple contracts in one batch
+// Send multiple contracts in one batch (all .await-ed)
 let messages = vec![
     Chat { text: "msg1".into() },
     Chat { text: "msg2".into() },
     Chat { text: "msg3".into() },
 ];
-let sent_count = connection.send_many(&messages);
+let sent_count = connection.send_many(&messages).await;
 
 // Send raw bytes (bypasses serializer)
 let raw_data = b"raw bytes";
-connection.send_bytes(raw_data);
+connection.send_bytes(raw_data).await;
 ```
 
-### Request/response: send and await matching reply
-`send_and_await_next_payload` sends a contract and asynchronously waits — up to a `timeout` — for the next incoming payload that matches a closure predicate. The closure receives `&TContract` and returns `bool`; only the payload for which it returns `true` resolves the awaiter.
+### Building request/response yourself
+There is no built-in `send_and_await_next_payload`. The pattern most projects use:
 
 ```rust
-use std::time::Duration;
-
-// Assume Chat carries a correlation id (e.g. text "REQ:42" / "RSP:42")
-let request = Chat { text: "REQ:42".into() };
-
-let response = connection
-    .send_and_await_next_payload(
-        &request,
-        Duration::from_secs(5),
-        |incoming: &Chat| {
-            // Closure runs against the head awaiter for each incoming contract.
-            incoming.text == "RSP:42"
-        },
-    )
-    .await;
-
-match response {
-    Ok(reply) => println!("got reply: {}", reply.text),
-    Err(err)  => eprintln!("await failed: {err}"), // "Not Connected" | "Timeout"
+// Pseudocode — adapt to your contract.
+struct ActiveRequests {
+    map: ahash::AHashMap<u64, TaskCompletion<MyContract, String>>,
 }
-```
 
-Notes:
-- The closure must be `Fn(&TContract) -> bool + Send + Sync + 'static` — it is stored on the connection until a matching payload arrives.
-- Only the head awaiter's closure is tested against each incoming payload. If it matches, the awaiter is removed and resolved; queued awaiters behind it wait their turn.
-- If the connection is not currently connected, the call returns `Err("Not Connected")` without sending.
-- If no matching payload arrives within `timeout`, the call returns `Err("Timeout")` **and disconnects the connection** (the reconnect loop on `TcpClient` will then re-establish it).
-- A payload consumed by `send_and_await_next_payload` (head awaiter matched) is delivered **only** to the awaiter — it is **not** forwarded to `SocketEventCallback::payload()`. Ping/pong contracts always bypass the awaiter and go to `payload()`.
+// 1. Register the awaiter, keyed by your correlation id (cl_ord_id, request_id, …).
+let mut completion = TaskCompletion::<MyContract, String>::new();
+let awaiter = completion.get_awaiter();
+active_requests.lock().await.map.insert(req_id, completion);
+
+// 2. Fire the request — note the .await.
+connection.send_bytes(&bytes).await;
+
+// 3. Wait with a timeout you control.
+let result = tokio::time::timeout(Duration::from_secs(3), awaiter.get_result()).await;
+
+// 4. In SocketEventCallback::payload, look up the completion by req_id and call set_ok(...).
+//    In SocketEventCallback::disconnected, drain the map and set_panic on each so awaiters wake up.
+```
 
 ### Connection statistics
 ```rust
@@ -314,26 +347,23 @@ if let Some(rtt) = stats.get_ping_pong_duration() {
 ```
 
 ### State management with incoming packets
-When a contract affects connection state (e.g., authentication, session setup), the library automatically calls `apply_tcp_contract` on your state if `is_tcp_contract_related_to_metadata` returns true. You can also manually update state:
+When a contract affects connection state (e.g., authentication, session setup), the library automatically calls `apply_tcp_contract` on your state if `is_tcp_contract_related_to_metadata` returns `true` — and it does so **before** dispatching the contract to `payload()`. You can also update state manually:
 
 ```rust
 #[async_trait]
 impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
     async fn payload(
-        &self,
+        &mut self,
         connection: &Arc<TcpSocketConnection<Chat, ChatSerializer, ChatState>>,
         contract: Chat,
     ) {
-        // Manually update state if needed (usually automatic)
-        connection.update_incoming_packet_to_state(&contract);
-        
-        // Process the message
-        connection.send(&contract);
+        // Manually feed a contract into per-connection state (rarely needed).
+        connection.update_incoming_packet_to_state(&contract).await;
+
+        connection.send(&contract).await;
     }
 }
 ```
-
-**Note**: The library automatically applies state updates for contracts where `is_tcp_contract_related_to_metadata` returns true before calling `payload()`. Use `update_incoming_packet_to_state` only if you need manual control.
 
 ### Thread statistics monitoring
 ```rust
@@ -348,18 +378,18 @@ let active_connections = stats.connections_objects.get();
 ## Error handling
 
 ### Deserialization errors
-If `deserialize()` returns `ReadingTcpContractFail`, the connection is automatically closed and `disconnected()` callback is invoked. Common causes:
+If `deserialize()` returns `ReadingTcpContractFail`, the connection is automatically closed and the `disconnected()` callback is invoked. Common causes:
 - Socket closed unexpectedly
 - Invalid protocol data
 - Timeout during read (configurable per connection)
 
 ### Send errors
-- `send()`, `send_many()`, `send_bytes()` return the number of bytes queued (0 if connection is closed).
-- If send buffer is full or connection is closed, messages are silently dropped. Check `connection.is_connected()` before sending.
-- Send operations have a timeout (default 30s, configurable via `TcpServer`/`TcpClient`).
+- `send()`, `send_many()`, `send_bytes()` return the number of bytes queued (`0` if the connection is closed at the time of the call).
+- These methods do not return `Result` — a closed connection silently drops the message. Check `connection.is_connected()` before sending if delivery matters.
+- The send pipeline has an internal write timeout; the connection is dropped (and the reconnect loop kicks in for `TcpClient`) if the write side stalls.
 
 ### Connection lifecycle
-- **Server**: Connections are accepted in a background task. If `ApplicationStates::is_shutting_down()` returns true, new connections are rejected.
+- **Server**: Connections are accepted in a background task. If `ApplicationStates::is_shutting_down()` returns `true`, new connections are rejected.
 - **Client**: If `get_host_port()` returns `None`, the client skips that attempt and retries after `reconnect_timeout`. Useful for dynamic configuration.
 - Dead connections are detected via ping/pong timeout (`disconnect_timeout`). The connection is closed and `disconnected()` is called.
 
@@ -368,10 +398,10 @@ If `deserialize()` returns `ReadingTcpContractFail`, the connection is automatic
 - On Unix you can also connect via Unix Domain Sockets; enable `with-tls` for TLS.
 - Inspect `threads_statistics` to monitor read/write threads and active connections.
 - Connection statistics are updated automatically; access them via `connection.statistics()`.
-- Ping/pong round-trip time is measured automatically when `is_pong()` returns true for a received contract.
-- If `TcpSerializerState::is_tcp_contract_related_to_metadata` returns true, the contract is applied to state before calling `payload()` callback.
+- Ping/pong round-trip time is measured automatically when `is_pong()` returns `true` for a received contract.
+- If `TcpSerializerState::is_tcp_contract_related_to_metadata` returns `true`, the contract is applied to state before calling `payload()`.
 - Always check `connection.is_connected()` before sending if you need to handle disconnections gracefully.
-- Use `send_many()` for batch operations; it's more efficient than multiple `send()` calls.
+- Use `send_many().await` for batch operations; it's more efficient than multiple `send().await` calls.
 
 ## Real-world usage: My Service Bus SDK
 `my-service-bus-sdk` builds on `my-tcp-sockets` to keep a long-lived TCP channel to the bus, serialize custom contracts, and auto-reconnect with backoff. Key patterns you can mirror ([repo](https://github.com/MyJetTools/my-service-bus-sdk)):
