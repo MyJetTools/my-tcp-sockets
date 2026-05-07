@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use rust_extensions::Logger;
+use rust_extensions::{AppStates, Logger};
 use tokio::sync::Mutex;
 
 use crate::{SocketEventCallback, TcpSocketSerializer};
@@ -27,11 +27,13 @@ pub struct TcpClientInner {
     pub threads_statistics: Arc<ThreadsStatistics>,
     pub settings: Arc<dyn TcpClientSocketSettings + Send + Sync + 'static>,
     tcp_connection_holder: Arc<TcpConnectionHolder>, //todo!("TcpConnectionHolder cases")
+   
 }
 
 pub struct TcpClient {
     background_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     inner: TcpClientInner,
+     app_states: Option<Arc<AppStates>>
 }
 
 impl TcpClient {
@@ -51,9 +53,17 @@ impl TcpClient {
                 threads_statistics: Arc::new(ThreadsStatistics::default()),
                 settings,
                 tcp_connection_holder: Arc::new(TcpConnectionHolder::new()),
+    
             },
             background_task: Mutex::new(None),
+            app_states: None,
         }
+    }
+    
+
+    pub fn set_app_states(mut self, app_states: Arc<AppStates>)->Self{
+        self.app_states = Some(app_states);
+        self
     }
 
     pub fn set_seconds_to_ping(mut self, seconds: usize) -> Self {
@@ -94,10 +104,16 @@ impl TcpClient {
             + Send
             + 'static,
     {
+
+        let app_states = match self.app_states.clone(){
+            Some(app_states) => app_states,
+            None => Arc::new(AppStates::create_initialized()),
+        };
         let handle = tokio::spawn(super::connection_loop(
             self.inner.clone(),
             logger,
             serializer_metadata_factory,
+            app_states,
             socket_callback,
         ));
 

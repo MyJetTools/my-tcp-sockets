@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use std::sync::Arc;
-use rust_extensions::Logger;
+use rust_extensions::{AppStates, Logger};
 
 use crate::{ SocketEventCallback, TcpSocketSerializer};
 use crate::{TcpContract, TcpSerializerFactory, TcpSerializerState};
@@ -19,6 +19,7 @@ pub async fn connection_loop<
     inner: TcpClientInner,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
     serializer_factory: Arc<TSerializerMetadataFactory>,
+    app_states: Arc<AppStates>,
     mut socket_callback: TSocketCallback,
 ) where
     TContract: TcpContract + Send + Sync + 'static,
@@ -34,6 +35,11 @@ pub async fn connection_loop<
     socket_context.insert("SocketName".to_string(), inner.name.to_string());
 
     loop {
+        
+        if app_states.is_shutting_down(){
+            break;
+        }
+
         let connection_id = crate::CURRENT_CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         tokio::time::sleep(inner.re_connect_timeout).await;
 
