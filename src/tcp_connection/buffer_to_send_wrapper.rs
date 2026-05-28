@@ -1,13 +1,10 @@
-use rust_extensions::events_loop::EventsLoopPublisher;
+use std::sync::Weak;
+
+use rust_extensions::background_executor::BackgroundExecutor;
 
 use crate::TcpSocketSerializer;
 
 use super::{TcpBufferChunk, TcpBufferToSend};
-
-pub enum PublishResult {
-    EventLoopIsNotStarted,
-    Disconnected,
-}
 
 pub struct BufferToSendWrapper<
     TContract: Send + Sync + 'static,
@@ -18,7 +15,7 @@ pub struct BufferToSendWrapper<
     pub serializer: Option<TSerializer>,
     phantom_contract: std::marker::PhantomData<TContract>,
     pub serializer_state: Option<TSerializerState>,
-    pub events_loop_publisher: Option<EventsLoopPublisher<()>>,
+    pub background_executor: Weak<BackgroundExecutor>,
 }
 
 impl<
@@ -30,7 +27,7 @@ impl<
     pub fn new(
         serializer: TSerializer,
         serializer_state: TSerializerState,
-        events_loop_publisher: EventsLoopPublisher<()>,
+        background_executor: Weak<BackgroundExecutor>,
     ) -> Self {
         Self {
             buffer_to_send: Some(TcpBufferToSend::default()),
@@ -38,7 +35,7 @@ impl<
             serializer: Some(serializer),
             phantom_contract: std::marker::PhantomData,
             serializer_state: Some(serializer_state),
-            events_loop_publisher: Some(events_loop_publisher),
+            background_executor,
         }
     }
 
@@ -47,8 +44,8 @@ impl<
         if let Some(buffer_to_send) = self.buffer_to_send.as_mut() {
             result = buffer_to_send.add_payload_directly_to_chunk(add_payload);
 
-            if let Some(events_loop) = self.events_loop_publisher.as_ref() {
-                events_loop.send(());
+            if let Some(background_executor) = self.background_executor.upgrade() {
+                background_executor.trigger();
             }
         }
 

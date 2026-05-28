@@ -27,9 +27,7 @@ pub async fn start_server_dead_connection_detector<
 
         skip = 0;
 
-        if connection.get_read_thread_status().is_finished()
-            || connection.get_write_thread_status().is_finished()
-        {
+        if connection.get_read_thread_status().is_finished() {
             connection.disconnect().await;
             break;
         }
@@ -47,11 +45,6 @@ pub async fn start_server_dead_connection_detector<
                 "Connection: {}. Read thread: {:?}",
                 connection.id,
                 connection.get_read_thread_status()
-            );
-            println!(
-                "Connection{}. Write thread:{:?}",
-                connection.id,
-                connection.get_write_thread_status()
             );
 
             connection.disconnect().await;

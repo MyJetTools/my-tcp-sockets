@@ -1,11 +1,11 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, atomic::{AtomicBool, AtomicI32}},
+    sync::{Arc, Weak, atomic::{AtomicBool, AtomicI32}},
 };
 
 use rust_extensions::{
-    events_loop::{EventsLoopPublisher, EventsLoopTick},
-    Logger, 
+    background_executor::{BackgroundExecutor, BackgroundJob},
+    Logger,
 };
 use tokio::sync::Mutex;
 
@@ -28,7 +28,6 @@ pub struct TcpConnectionInner<
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub threads_statistics: Arc<crate::ThreadsStatistics>,
     read_thread_status: AtomicI32,
-    write_thread_status: AtomicI32,
 }
 
 impl<
@@ -42,7 +41,7 @@ impl<
         max_send_payload_size: usize,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
         threads_statistics: Arc<crate::ThreadsStatistics>,
-        events_loop_publisher: EventsLoopPublisher<()>,
+        background_executor: Weak<BackgroundExecutor>,
         serializer: TSerializer,
         serializer_state: TSerializerState,
     ) -> Self {
@@ -51,7 +50,7 @@ impl<
             buffer_to_send_inner: parking_lot::Mutex::new(BufferToSendWrapper::new(
                 serializer,
                 serializer_state,
-                events_loop_publisher,
+                background_executor,
             )),
             max_send_payload_size,
             connected: true.into(),
@@ -59,13 +58,7 @@ impl<
             logger,
             threads_statistics,
             read_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted.as_i32()),
-            write_thread_status: AtomicI32::new(TcpThreadStatus::NotStarted.as_i32()),
         }
-    }
-
-    pub fn update_write_thread_status(&self, status: TcpThreadStatus) {
-        self.write_thread_status
-            .store(status.as_i32(), std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn update_read_thread_status(&self, status: TcpThreadStatus) {
@@ -75,12 +68,6 @@ impl<
 
     pub fn get_read_thread_status(&self) -> TcpThreadStatus {
         self.read_thread_status
-            .load(std::sync::atomic::Ordering::SeqCst)
-            .into()
-    }
-
-    pub fn get_write_thread_status(&self) -> TcpThreadStatus {
-        self.write_thread_status
             .load(std::sync::atomic::Ordering::SeqCst)
             .into()
     }
@@ -212,9 +199,6 @@ impl<
         {
             let mut inner = self.buffer_to_send_inner.lock();
             inner.buffer_to_send = None;
-            if let Some(events_loop_publisher) = inner.events_loop_publisher.take() {
-                events_loop_publisher.stop();
-            }
         }
 
         just_disconnected
@@ -235,22 +219,9 @@ impl<
         TContract: Send + Sync + 'static,
         TSerializer: TcpSocketSerializer<TContract, TSerializationMetadata> + Send + Sync + 'static,
         TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
-    > EventsLoopTick<()> for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
+    > BackgroundJob for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
-    async fn started(&self) {
-        //  println!("EventsLoop started: {:?}", self.get_log_context().await);
-
-        self.update_write_thread_status(TcpThreadStatus::Started);
-        self.threads_statistics.write_threads.increase();
-    }
-
-    async fn tick(&self, _: ()) {
+    async fn execute(&self) {
         self.push_send_buffer_to_connection().await;
-    }
-
-    async fn finished(&self) {
-        //        println!("EventsLoop finished: {:?}", self.get_log_context().await);
-        self.update_write_thread_status(TcpThreadStatus::Finished);
-        self.threads_statistics.write_threads.decrease();
     }
 }

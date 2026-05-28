@@ -179,7 +179,7 @@ All of the following are available on `Arc<TcpSocketConnection<...>>` you receiv
 | `set_connection_name(&self, name: String)` | async | Updates the human-readable name used in logs. |
 | `update_incoming_packet_to_state(&self, contract: &TContract)` | async | Manually feed an inbound contract into the per-connection `TcpSerializerState`. The library does this automatically when `is_tcp_contract_related_to_metadata` returns `true`. |
 | `get_log_context(&self)` | async | Returns the connection's logging key/value map. |
-| `update_read_thread_status(&self, status)` / `get_read_thread_status(&self)` / `get_write_thread_status(&self)` | sync | Used by the dead-connection detector. |
+| `update_read_thread_status(&self, status)` / `get_read_thread_status(&self)` | sync | Used by the dead-connection detector. |
 | `statistics(&self) -> &ConnectionStatistics` | sync | See "Connection statistics" below. |
 | `is_dead(&self, now: DateTimeAsMicroseconds) -> bool` | sync | True if the dead-connection detector should kill this socket. |
 
@@ -370,7 +370,6 @@ impl SocketEventCallback<Chat, ChatSerializer, ChatState> for Echo {
 let stats = &server.threads_statistics; // or client.inner.threads_statistics
 
 let read_threads = stats.read_threads.get();
-let write_threads = stats.write_threads.get();
 let ping_threads = stats.ping_threads.get();
 let active_connections = stats.connections_objects.get();
 ```

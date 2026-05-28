@@ -22,7 +22,6 @@ impl ThreadAmount {
 #[derive(Default)]
 pub struct ThreadsStatistics {
     pub read_threads: ThreadAmount,
-    pub write_threads: ThreadAmount,
     pub ping_threads: ThreadAmount,
     pub connections_objects: ThreadAmount,
 }

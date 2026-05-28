@@ -26,9 +26,7 @@ pub async fn start<
 
         connection.statistics().one_second_tick();
 
-        if connection.get_read_thread_status().is_finished()
-            || connection.get_write_thread_status().is_finished()
-        {
+        if connection.get_read_thread_status().is_finished() {
             connection.disconnect().await;
             break;
         }

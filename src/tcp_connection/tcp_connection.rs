@@ -5,14 +5,14 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use rust_extensions::{Logger, TaskCompletion};
-use rust_extensions::{date_time::DateTimeAsMicroseconds, events_loop::EventsLoop};
+use rust_extensions::{background_executor::BackgroundExecutor, date_time::DateTimeAsMicroseconds};
 
 use crate::{
     ConnectionId, MaybeTlsWriteStream, SocketAddress,  TcpSerializerState, TcpSocketSerializer
 };
 
 use super::{
-    TcpConnectionAbstraction, TcpConnectionInner, TcpConnectionStates, TcpConnectionStream,
+    TcpConnectionAbstraction, TcpConnectionInner, TcpConnectionStream,
 };
 
 #[derive(Debug)]
@@ -102,7 +102,7 @@ where
     pub dead_disconnect_timeout: Duration,
     pub logger: Arc<dyn Logger + Send + Sync + 'static>,
     pub threads_statistics: Arc<crate::ThreadsStatistics>,
-    pub events_loop: EventsLoop<()>,
+    pub background_executor: Arc<BackgroundExecutor>,
 }
 
 impl<
@@ -133,27 +133,26 @@ impl<
             master_socket_name.clone(),
         );
 
-        let events_loop = EventsLoop::new(
-            format!("TcpConnection {}.{}", master_socket_name, id),
-            
-        )
-        .set_iteration_timeout(Duration::from_secs(60));
+        let background_executor = Arc::new(BackgroundExecutor::new(format!(
+            "TcpConnection {}.{}",
+            master_socket_name, id
+        )));
 
         let inner = Arc::new(TcpConnectionInner::new(
             connection_stream,
             max_send_payload_size,
             logger.clone(),
             threads_statistics.clone(),
-            events_loop.get_publisher(),
+            Arc::downgrade(&background_executor),
             serializer,
             serializer_state,
         ));
 
         threads_statistics.connections_objects.increase();
 
-        events_loop.register_event_loop(inner.clone());
+        background_executor.register(inner.clone());
 
-        events_loop.start(Arc::new(TcpConnectionStates::default()), logger.clone());
+        background_executor.start(logger.clone());
 
         Self {
             id,
@@ -162,7 +161,7 @@ impl<
             addr,
             dead_disconnect_timeout,
             threads_statistics,
-            events_loop,
+            background_executor,
             next_packet_synch: Default::default()
         }
     }
@@ -185,10 +184,6 @@ impl<
 
     pub fn get_read_thread_status(&self) -> TcpThreadStatus {
         self.inner.get_read_thread_status()
-    }
-
-    pub fn get_write_thread_status(&self) -> TcpThreadStatus {
-        self.inner.get_write_thread_status()
     }
 
     pub fn send(&self, contract: &TContract) -> usize {
