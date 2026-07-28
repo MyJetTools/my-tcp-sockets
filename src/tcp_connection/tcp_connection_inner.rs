@@ -4,7 +4,7 @@ use std::{
 };
 
 use rust_extensions::{
-    background_executor::{BackgroundExecutor, BackgroundJob},
+    background_executor::{BackgroundExecutor, BackgroundJob, RepeatIteration},
     Logger,
 };
 use tokio::sync::Mutex;
@@ -221,7 +221,8 @@ impl<
         TSerializationMetadata: TcpSerializerState<TContract> + Send + Sync + 'static,
     > BackgroundJob for TcpConnectionInner<TContract, TSerializer, TSerializationMetadata>
 {
-    async fn execute(&self) {
+    async fn execute(&self) -> RepeatIteration {
         self.push_send_buffer_to_connection().await;
+        RepeatIteration::No
     }
 }
