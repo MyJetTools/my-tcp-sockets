@@ -12,9 +12,9 @@ Async TCP server/client building blocks for Tokio with pluggable serialization, 
 ## Add to Cargo.toml
 ```toml
 [dependencies]
-my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.13" }
+my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.12" }
 # Enable TLS if needed
-# my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.13", features = ["with-tls"] }
+# my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.12", features = ["with-tls"] }
 ```
 
 ## Core concepts
