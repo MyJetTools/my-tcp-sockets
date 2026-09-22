@@ -5,14 +5,27 @@ use my_tls::tokio_rustls::rustls::pki_types::ServerName;
 use my_tls::ROOT_CERT_STORE;
 use tokio::net::TcpStream;
 
+use super::accept_invalid_certs_verifier::AcceptInvalidCertsVerifier;
+
 pub async fn do_handshake(
     tcp_client_name: &str,
     tcp_stream: TcpStream,
     server_name: String,
+    accept_invalid_certs: bool,
 ) -> Result<TlsStream<TcpStream>, String> {
-    let config = my_tls::tokio_rustls::rustls::ClientConfig::builder()
-        .with_root_certificates(ROOT_CERT_STORE.clone())
-        .with_no_client_auth();
+    let builder = my_tls::tokio_rustls::rustls::ClientConfig::builder();
+
+    let config = if accept_invalid_certs {
+        let verifier = AcceptInvalidCertsVerifier::new(builder.crypto_provider().clone());
+        builder
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(verifier))
+            .with_no_client_auth()
+    } else {
+        builder
+            .with_root_certificates(ROOT_CERT_STORE.clone())
+            .with_no_client_auth()
+    };
 
     let connector = my_tls::tokio_rustls::TlsConnector::from(Arc::new(config));
     let domain = ServerName::try_from(server_name);

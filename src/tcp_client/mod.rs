@@ -14,6 +14,8 @@ mod dead_connection_detector;
 mod tls;
 #[cfg(feature = "with-tls")]
 pub use tls::*;
+#[cfg(feature = "with-tls")]
+mod accept_invalid_certs_verifier;
 
 #[cfg(unix)]
 mod connect_to_unix_socket;

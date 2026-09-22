@@ -71,6 +71,7 @@ pub async fn connect_to_tcp_socket<
                 inner.name.as_str(),
                 tcp_stream,
                 tls_settings.server_name,
+                tls_settings.accept_invalid_certs,
             )
             .await;
 

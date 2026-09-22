@@ -12,9 +12,9 @@ Async TCP server/client building blocks for Tokio with pluggable serialization, 
 ## Add to Cargo.toml
 ```toml
 [dependencies]
-my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.12" }
+my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.13" }
 # Enable TLS if needed
-# my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.12", features = ["with-tls"] }
+# my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag = "0.1.13", features = ["with-tls"] }
 ```
 
 ## Core concepts
@@ -231,7 +231,7 @@ let client = TcpClient::new(
     "chat-client".to_string(),
     Arc::new(StaticSettings {
         addr: "127.0.0.1:7000".into(),
-        tls: None, // or Some(TlsSettings { server_name: "example.com".into() })
+        tls: None, // or Some(TlsSettings::new("example.com".into()))
     }),
 )
 .set_seconds_to_ping(5)                            // Send ping every 5 seconds
@@ -257,7 +257,16 @@ client.stop().await;
 **Note**: If `get_host_port()` returns `None`, the client will skip that connection attempt and retry after `reconnect_timeout`. This is useful for dynamic configuration where the endpoint might not be available yet.
 
 ### TLS on the client (feature `with-tls`)
-When `get_tls_settings()` returns `Some(TlsSettings { server_name })`, the client performs a rustls TLS handshake over the freshly opened TCP stream (using the bundled root certificate store from `my_tls::ROOT_CERT_STORE`) and wraps the read/write halves as `MaybeTls{Read,Write}Stream::Tls`. Handshake failures are logged and the reconnect loop retries after `reconnect_timeout`. Returning `None` keeps the connection plain TCP. TLS requires the `with-tls` feature; without it `get_tls_settings()` is ignored at build time.
+When `get_tls_settings()` returns `Some(TlsSettings { server_name, accept_invalid_certs })`, the client performs a rustls TLS handshake over the freshly opened TCP stream (using the bundled root certificate store from `my_tls::ROOT_CERT_STORE`) and wraps the read/write halves as `MaybeTls{Read,Write}Stream::Tls`. Handshake failures are logged and the reconnect loop retries after `reconnect_timeout`. Returning `None` keeps the connection plain TCP. TLS requires the `with-tls` feature; without it `get_tls_settings()` is ignored at build time.
+
+`TlsSettings::new(server_name)` builds settings with full certificate validation. Set `accept_invalid_certs: true` to connect to an endpoint whose certificate is self-signed, expired or issued for another hostname, **when that endpoint is trusted out-of-band**. Only certificate chain validation is skipped: handshake signatures are still verified against the presented certificate with the active rustls `CryptoProvider`.
+
+```rust
+let tls = TlsSettings {
+    server_name: "fix.example.com".into(),
+    accept_invalid_certs: true,
+};
+```
 
 ## Unix Domain Socket server (Unix only)
 ```rust
