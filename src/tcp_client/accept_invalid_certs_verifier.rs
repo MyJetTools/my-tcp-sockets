@@ -1,27 +1,14 @@
-use std::sync::Arc;
-
 use my_tls::tokio_rustls::rustls::client::danger::{
     HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
-};
-use my_tls::tokio_rustls::rustls::crypto::{
-    verify_tls12_signature, verify_tls13_signature, CryptoProvider,
 };
 use my_tls::tokio_rustls::rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use my_tls::tokio_rustls::rustls::{DigitallySignedStruct, Error, SignatureScheme};
 
-/// Accepts any server certificate chain (self-signed, expired, hostname mismatch),
-/// but still verifies handshake signatures against the presented certificate,
-/// so the peer must own the private key of the certificate it presents.
+/// DANGER: accepts any server certificate (self-signed, expired, hostname mismatch,
+/// weak key) and does not verify handshake signatures, so a MITM is not detected.
+/// Only for endpoints trusted out-of-band.
 #[derive(Debug)]
-pub struct AcceptInvalidCertsVerifier {
-    provider: Arc<CryptoProvider>,
-}
-
-impl AcceptInvalidCertsVerifier {
-    pub fn new(provider: Arc<CryptoProvider>) -> Self {
-        Self { provider }
-    }
-}
+pub struct AcceptInvalidCertsVerifier;
 
 impl ServerCertVerifier for AcceptInvalidCertsVerifier {
     fn verify_server_cert(
@@ -37,35 +24,39 @@ impl ServerCertVerifier for AcceptInvalidCertsVerifier {
 
     fn verify_tls12_signature(
         &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, Error> {
-        verify_tls12_signature(
-            message,
-            cert,
-            dss,
-            &self.provider.signature_verification_algorithms,
-        )
+        Ok(HandshakeSignatureValid::assertion())
     }
 
     fn verify_tls13_signature(
         &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, Error> {
-        verify_tls13_signature(
-            message,
-            cert,
-            dss,
-            &self.provider.signature_verification_algorithms,
-        )
+        Ok(HandshakeSignatureValid::assertion())
     }
 
+    // Not limited to the installed CryptoProvider: signatures are never checked,
+    // so whatever scheme the server signs with must be offered.
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.provider
-            .signature_verification_algorithms
-            .supported_schemes()
+        vec![
+            SignatureScheme::RSA_PKCS1_SHA1,
+            SignatureScheme::ECDSA_SHA1_Legacy,
+            SignatureScheme::RSA_PKCS1_SHA256,
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            SignatureScheme::RSA_PKCS1_SHA384,
+            SignatureScheme::ECDSA_NISTP384_SHA384,
+            SignatureScheme::RSA_PKCS1_SHA512,
+            SignatureScheme::ECDSA_NISTP521_SHA512,
+            SignatureScheme::RSA_PSS_SHA256,
+            SignatureScheme::RSA_PSS_SHA384,
+            SignatureScheme::RSA_PSS_SHA512,
+            SignatureScheme::ED25519,
+            SignatureScheme::ED448,
+        ]
     }
 }

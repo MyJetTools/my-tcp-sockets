@@ -16,10 +16,9 @@ pub async fn do_handshake(
     let builder = my_tls::tokio_rustls::rustls::ClientConfig::builder();
 
     let config = if accept_invalid_certs {
-        let verifier = AcceptInvalidCertsVerifier::new(builder.crypto_provider().clone());
         builder
             .dangerous()
-            .with_custom_certificate_verifier(Arc::new(verifier))
+            .with_custom_certificate_verifier(Arc::new(AcceptInvalidCertsVerifier))
             .with_no_client_auth()
     } else {
         builder

@@ -259,7 +259,7 @@ client.stop().await;
 ### TLS on the client (feature `with-tls`)
 When `get_tls_settings()` returns `Some(TlsSettings { server_name, accept_invalid_certs })`, the client performs a rustls TLS handshake over the freshly opened TCP stream (using the bundled root certificate store from `my_tls::ROOT_CERT_STORE`) and wraps the read/write halves as `MaybeTls{Read,Write}Stream::Tls`. Handshake failures are logged and the reconnect loop retries after `reconnect_timeout`. Returning `None` keeps the connection plain TCP. TLS requires the `with-tls` feature; without it `get_tls_settings()` is ignored at build time.
 
-`TlsSettings::new(server_name)` builds settings with full certificate validation. Set `accept_invalid_certs: true` to connect to an endpoint whose certificate is self-signed, expired or issued for another hostname, **when that endpoint is trusted out-of-band**. Only certificate chain validation is skipped: handshake signatures are still verified against the presented certificate with the active rustls `CryptoProvider`.
+`TlsSettings::new(server_name)` builds settings with full certificate validation. Set `accept_invalid_certs: true` to connect to an endpoint whose certificate is self-signed, expired or issued for another hostname, **when that endpoint is trusted out-of-band**. This accepts ANY server certificate and skips handshake signature verification as well, so a man-in-the-middle is not detected — never enable it for endpoints you do not trust by other means.
 
 ```rust
 let tls = TlsSettings {

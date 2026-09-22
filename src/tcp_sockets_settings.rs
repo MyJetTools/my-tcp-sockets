@@ -7,8 +7,9 @@ pub trait TcpClientSocketSettings {
 #[derive(Debug, Clone)]
 pub struct TlsSettings {
     pub server_name: String,
-    /// Skips server certificate chain validation (self-signed, expired, hostname mismatch).
-    /// Handshake signatures are still verified. Use only for endpoints trusted out-of-band.
+    /// DANGER: when `true` the client accepts ANY server certificate (self-signed, expired,
+    /// hostname mismatch) and does not verify handshake signatures, so a MITM is not detected.
+    /// Use only for endpoints trusted out-of-band. [`TlsSettings::new`] sets it to `false`.
     pub accept_invalid_certs: bool,
 }
 
