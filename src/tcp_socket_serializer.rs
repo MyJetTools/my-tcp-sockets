@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 
 use crate::{
@@ -18,7 +20,8 @@ pub trait TcpSocketSerializer<
         state: &TSerializerState,
     );
 
-    fn get_ping(&self) -> TContract;
+    // latency - round trip of the previous ping/pong. None until the first pong is received
+    fn get_ping(&self, latency: Option<Duration>) -> TContract;
 
     async fn deserialize<TSocketReader: Send + Sync + 'static + SocketReader>(
         &mut self,

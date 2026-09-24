@@ -108,11 +108,15 @@ impl<
         result
     }
     pub fn send_ping(&self) -> usize {
+        let latency = self.statistics.get_ping_pong_duration();
+
+        self.statistics.set_ping_start();
+
         let mut write_access = self.buffer_to_send_inner.lock();
 
         let serializer = write_access.serializer.take().unwrap();
 
-        let ping = serializer.get_ping();
+        let ping = serializer.get_ping(latency);
 
         let serializer_state = write_access.serializer_state.take().unwrap();
 

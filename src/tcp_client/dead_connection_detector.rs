@@ -35,7 +35,6 @@ pub async fn start<
 
         if seconds_remains_to_ping == 0 {
             seconds_remains_to_ping = seconds_to_ping;
-            connection.statistics().set_ping_start();
             connection.send_ping();
         }
 

@@ -18,8 +18,8 @@ my-tcp-sockets = { git = "https://github.com/MyJetTools/my-tcp-sockets.git", tag
 ```
 
 ## Core concepts
-- **`TcpContract`**: Your message type. The trait has a single method — `is_pong(&self) -> bool` — so the keep-alive loop can spot pong replies. **There is no `is_ping()`** on this trait; outgoing pings are produced by the serializer's `get_ping()`.
-- **`TcpSocketSerializer`**: Serializes contracts to bytes and deserializes from a socket reader. Provides `get_ping()` for keep-alive.
+- **`TcpContract`**: Your message type. `is_pong(&self) -> bool` lets the keep-alive loop spot pong replies and measure the round trip; `is_ping(&self) -> bool` marks incoming pings. Both are always delivered to `payload()`. Outgoing pings are produced by the serializer's `get_ping(latency)`.
+- **`TcpSocketSerializer`**: Serializes contracts to bytes and deserializes from a socket reader. Provides `get_ping(latency)` for keep-alive — `latency` is the round trip of the previous ping/pong, so the ping can carry it to the other side (see "Passing latency to the server").
 - **`TcpSerializerState`**: Per-connection state that can be updated by incoming contracts. Use `is_tcp_contract_related_to_metadata()` to filter which contracts update state, and `apply_tcp_contract()` to mutate it.
 - **`TcpSerializerFactory`**: Creates serializer and state instances for each new connection.
 - **`SocketEventCallback`**: Async hooks for `connected()`, `payload()`, `disconnected()` events. All three take `&mut self`.
@@ -49,6 +49,8 @@ If you find existing code that calls these without `.await`, treat it as a bug.
 
 ## Minimal protocol example
 ```rust
+use std::time::Duration;
+
 use async_trait::async_trait;
 use my_tcp_sockets::{
     socket_reader::ReadingTcpContractFail, socket_reader::SocketReader, TcpContract,
@@ -61,6 +63,10 @@ struct Chat {
 }
 
 impl TcpContract for Chat {
+    fn is_ping(&self) -> bool {
+        self.text == "PING"
+    }
+
     fn is_pong(&self) -> bool {
         self.text == "PONG"
     }
@@ -86,7 +92,7 @@ impl TcpSocketSerializer<Chat, ChatState> for ChatSerializer {
         out.write_byte_array(contract.text.as_bytes());
     }
 
-    fn get_ping(&self) -> Chat {
+    fn get_ping(&self, _latency: Option<Duration>) -> Chat {
         Chat { text: "PING".into() }
     }
 
@@ -175,7 +181,7 @@ All of the following are available on `Arc<TcpSocketConnection<...>>` you receiv
 | `send(&self, contract: &TContract) -> usize` | **async** | Serializes through the configured `TcpSocketSerializer`, then enqueues. |
 | `send_many(&self, contracts: &[TContract]) -> usize` | **async** | Batched variant of `send`. |
 | `send_bytes(&self, payload: &[u8]) -> usize` | **async** | Bypasses the serializer; enqueues a pre-encoded frame. |
-| `send_ping(&self) -> usize` | async | Built from the serializer's `get_ping()`. The keep-alive loop calls this for you; you rarely call it manually. |
+| `send_ping(&self) -> usize` | async | Built from the serializer's `get_ping(latency)`, where `latency` is `statistics().get_ping_pong_duration()`. The keep-alive loop calls this for you; you rarely call it manually. |
 | `set_connection_name(&self, name: String)` | async | Updates the human-readable name used in logs. |
 | `update_incoming_packet_to_state(&self, contract: &TContract)` | async | Manually feed an inbound contract into the per-connection `TcpSerializerState`. The library does this automatically when `is_tcp_contract_related_to_metadata` returns `true`. |
 | `get_log_context(&self)` | async | Returns the connection's logging key/value map. |
@@ -354,6 +360,20 @@ if let Some(rtt) = stats.get_ping_pong_duration() {
     println!("Round-trip time: {:?}", rtt);
 }
 ```
+
+### Passing latency to the server
+Only the side that sends pings (`TcpClient`) can measure the round trip. Each keep-alive ping is built with `get_ping(latency)`, where `latency` is the round trip of the previous ping/pong (`None` until the first pong arrives). Put it into the ping contract and the server learns the connection's latency from the next ping:
+
+```rust
+fn get_ping(&self, latency: Option<Duration>) -> MyContract {
+    match latency {
+        Some(latency) => MyContract::PingWithLatency(latency),
+        None => MyContract::Ping,
+    }
+}
+```
+
+On the server, handle `PingWithLatency` in `payload()` like a regular ping (reply with a pong) and keep the latency wherever you need it. Remember to return `true` from `is_ping()` for both variants.
 
 ### State management with incoming packets
 When a contract affects connection state (e.g., authentication, session setup), the library automatically calls `apply_tcp_contract` on your state if `is_tcp_contract_related_to_metadata` returns `true` — and it does so **before** dispatching the contract to `payload()`. You can also update state manually:
